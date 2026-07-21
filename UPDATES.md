@@ -41,16 +41,27 @@
   - `askQuestion(question)` -> `POST /ask`
   - `getMetrics()` -> `GET /metrics`
   - `getLeadershipReport()` -> `GET /leadership-report`
-  - Graceful error handling and JSON parsing.
 - Created reusable UI components:
-  - [frontend/src/components/Header.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/Header.jsx): Top navigation bar with branding, live status badge, and leadership button.
-  - [frontend/src/components/LeadershipButton.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/LeadershipButton.jsx): Report trigger button with loading spinner state.
-  - [frontend/src/components/ChatWindow.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatWindow.jsx): Scrollable message container with auto-scrolling to bottom and typing indicators.
-  - [frontend/src/components/ChatMessage.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatMessage.jsx): Renders markdown formatted responses using `react-markdown` and `remark-gfm` with avatars, role badges, and data quality caveats.
-  - [frontend/src/components/DataQualityBadge.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/DataQualityBadge.jsx): Expandable data quality caveat notes badge.
-  - [frontend/src/components/ChatInput.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatInput.jsx): Auto-resizing textarea supporting Enter to send, Shift+Enter for newline, suggestion chips, and disabled loading states.
-- Refactored [frontend/src/App.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/App.jsx): Clean, lightweight main layout managing `messages`, `loading`, `reportLoading`, and `error` states.
-- Installed `react-markdown`, `remark-gfm`, and `lucide-react`.
+  - [frontend/src/components/Header.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/Header.jsx): Navigation header with live status badge and tab switcher ('AI Assistant' vs 'Dashboard').
+  - [frontend/src/components/LeadershipButton.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/LeadershipButton.jsx): Executive report trigger button.
+  - [frontend/src/components/ChatWindow.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatWindow.jsx): Scrollable chat feed with auto-scroll and loading indicators.
+  - [frontend/src/components/ChatMessage.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatMessage.jsx): Markdown response renderer using `react-markdown` and `remark-gfm`.
+  - [frontend/src/components/DataQualityBadge.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/DataQualityBadge.jsx): Expandable caveat notes badge.
+  - [frontend/src/components/ChatInput.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatInput.jsx): Auto-resizing textarea with suggestion chips.
+
+### 5. Executive Dashboard & Recharts Integration (`frontend/`)
+- Created custom hook [frontend/src/hooks/useDashboard.js](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/hooks/useDashboard.js):
+  - Fetches and caches metrics from `GET /metrics` with session state management and retry handlers.
+- Installed `recharts` for interactive responsive charting.
+- Created dashboard components:
+  - [frontend/src/components/dashboard/Dashboard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/Dashboard.jsx): Main dashboard container with skeleton loaders, retry error state, and 2-column responsive grid layout.
+  - [frontend/src/components/dashboard/KPICards.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/KPICards.jsx): 4 top summary cards (Pipeline Value, Average Deal Size, Billing %, Work Order Completion %).
+  - [frontend/src/components/dashboard/RevenueBySectorChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/RevenueBySectorChart.jsx): Responsive Bar Chart.
+  - [frontend/src/components/dashboard/RevenueByStageChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/RevenueByStageChart.jsx): Responsive Donut/Pie Chart.
+  - [frontend/src/components/dashboard/MonthlyPipelineChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/MonthlyPipelineChart.jsx): Responsive Line Chart.
+  - [frontend/src/components/dashboard/TopCustomersTable.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/TopCustomersTable.jsx): Top 10 customer revenue table.
+  - [frontend/src/components/dashboard/BillingSummaryCard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/BillingSummaryCard.jsx): Financial realization & backlog card.
+  - [frontend/src/components/dashboard/WorkOrderCard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/WorkOrderCard.jsx): Operational fulfillment status distribution card.
 - Verified production build (`npm run build`) successfully.
 
 ---

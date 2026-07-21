@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import Header from './components/Header';
 import ChatWindow from './components/ChatWindow';
 import ChatInput from './components/ChatInput';
+import Dashboard from './components/dashboard/Dashboard';
 import { askQuestion, getLeadershipReport } from './api/api';
 import { AlertTriangle, X } from 'lucide-react';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'dashboard'
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
@@ -58,6 +60,8 @@ export default function App() {
   const handleGenerateReport = async () => {
     if (reportLoading) return;
 
+    // Switch to chat tab to view report
+    setActiveTab('chat');
     setError(null);
     setReportLoading(true);
 
@@ -79,9 +83,14 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white overflow-hidden">
       {/* Header */}
-      <Header onGenerateReport={handleGenerateReport} reportLoading={reportLoading} />
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onGenerateReport={handleGenerateReport}
+        reportLoading={reportLoading}
+      />
 
       {/* Error Banner */}
       {error && (
@@ -92,18 +101,24 @@ export default function App() {
           </div>
           <button
             onClick={() => setError(null)}
-            className="text-red-400 hover:text-red-200 transition-colors p-1"
+            className="text-red-400 hover:text-red-200 transition-colors p-1 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Main Chat Window */}
-      <ChatWindow messages={messages} loading={loading} />
-
-      {/* Chat Input Bar */}
-      <ChatInput onSendMessage={handleSendMessage} disabled={loading || reportLoading} />
+      {/* Content View Tab Switching */}
+      {activeTab === 'chat' ? (
+        <>
+          <ChatWindow messages={messages} loading={loading} />
+          <ChatInput onSendMessage={handleSendMessage} disabled={loading || reportLoading} />
+        </>
+      ) : (
+        <div className="flex-1 overflow-y-auto min-h-0 bg-slate-950">
+          <Dashboard />
+        </div>
+      )}
     </div>
   );
 }
