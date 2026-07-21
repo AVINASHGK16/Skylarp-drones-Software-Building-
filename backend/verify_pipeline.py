@@ -172,14 +172,14 @@ def run_verification():
     import json
     print(json.dumps(metrics, indent=2))
 
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    if gemini_key and gemini_key != "your_gemini_api_key_here":
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key and groq_key != "your_groq_api_key_here":
         print("\n")
         print("=" * 70)
-        print("BI AGENT EXECUTIVE RESPONSE (LIVE GEMINI API)")
+        print("BI AGENT EXECUTIVE RESPONSE (LIVE GROQ API)")
         print("=" * 70)
         from services.bi_agent import BIAgent
-        agent = BIAgent(api_key=gemini_key)
+        agent = BIAgent(api_key=groq_key)
         res = agent.answer_question("What are our top revenue sectors and operational risks?", deals_df, wo_df, report)
         print("\nAI Answer:\n", res.get("answer"))
 

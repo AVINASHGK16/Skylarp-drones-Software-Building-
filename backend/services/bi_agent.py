@@ -1,6 +1,6 @@
 """
 BI Agent Service for Monday.com BI Agent.
-Interacts with Google Gemini API using google-genai SDK to answer executive
+Interacts with the Groq API through the official OpenAI-compatible Python client to answer executive
 business questions and generate leadership reports based strictly on
 pre-computed business metrics from analytics_engine.py.
 
@@ -14,7 +14,7 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from google import genai
+from openai import OpenAI
 import pandas as pd
 
 # Load environment variables
@@ -33,141 +33,60 @@ except ImportError:
 class BIAgent:
     """
     AI Business Intelligence Agent advising executives and founders.
-    Uses Google Gemini models to interpret analytics_engine KPIs.
+    Uses Groq-hosted models to interpret analytics_engine KPIs.
     """
 
-    DEFAULT_MODEL = "gemini-2.0-flash"
+    DEFAULT_MODEL = "openai/gpt-oss-120b"
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         """
-        Initialize the BI Agent with Google GenAI SDK.
+        Initialize the BI Agent with Groq's OpenAI-compatible API.
 
         Args:
-            api_key: Optional Gemini API key. If not provided, it is loaded
-                     from the GEMINI_API_KEY environment variable.
-            model: Optional Gemini model identifier. If not provided, it is dynamically
-                   resolved from available API models or environment configuration.
+            api_key: Optional Groq API key. If not provided, it is loaded
+                     from the GROQ_API_KEY environment variable.
+            model: Optional Groq model identifier. If not provided, it is loaded
+                   from GROQ_MODEL or defaults to Groq's production GPT-OSS 120B model.
 
         Raises:
-            ValueError: If GEMINI_API_KEY is not set or provided.
+            ValueError: If GROQ_API_KEY is not set or provided.
         """
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "GEMINI_API_KEY environment variable is not set and no API key was provided."
+                "GROQ_API_KEY environment variable is not set and no API key was provided."
             )
 
-        self.client = genai.Client(api_key=self.api_key)
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url="https://api.groq.com/openai/v1",
+        )
         self.model = self._resolve_model(model)
-        logger.info("BIAgent initialized successfully with resolved model '%s'.", self.model)
+        logger.info("BIAgent initialized successfully with Groq model '%s'.", self.model)
 
     def _resolve_model(self, requested_model: str | None = None) -> str:
         """
-        Dynamically discover and select a valid, supported Gemini model
-        for generateContent from the client API list if requested_model is not explicitly set.
+        Resolve the configured Groq model without provider-side model discovery.
         """
         if requested_model and requested_model.strip():
             return requested_model.strip()
 
-        env_model = os.getenv("GEMINI_MODEL")
+        env_model = os.getenv("GROQ_MODEL")
         if env_model and env_model.strip():
             return env_model.strip()
-
-        # Try dynamically listing available models from Google GenAI API for this API key
-        try:
-            available_models = []
-            models_pager = self.client.models.list()
-            for m in models_pager:
-                m_name = getattr(m, "name", "") or ""
-                actions = (
-                    getattr(m, "supported_actions", [])
-                    or getattr(m, "supported_generation_methods", [])
-                    or []
-                )
-
-                clean_name = m_name.split("/")[-1] if "/" in m_name else m_name
-                supports_generate = False
-                if not actions:
-                    supports_generate = "gemini" in clean_name.lower()
-                else:
-                    supports_generate = any(
-                        "generatecontent" in str(act).lower() for act in actions
-                    )
-
-                if supports_generate and "gemini" in clean_name.lower():
-                    available_models.append(clean_name)
-
-            if available_models:
-                logger.info("Discovered available Gemini models for API key: %s", available_models)
-                for preferred in [
-                    "gemini-2.0-flash",
-                    "gemini-1.5-flash",
-                    "gemini-1.5-pro",
-                    "gemini-2.0-flash-exp",
-                    "gemini-pro",
-                ]:
-                    for model_candidate in available_models:
-                        if preferred in model_candidate.lower():
-                            logger.info("Dynamically selected preferred Gemini model: '%s'", model_candidate)
-                            return model_candidate
-
-                selected = available_models[0]
-                logger.info("Dynamically selected first available Gemini model: '%s'", selected)
-                return selected
-
-        except Exception as e:
-            logger.warning(
-                "Failed to list models dynamically from Gemini API (%s). Defaulting to candidate fallback.", e
-            )
 
         return self.DEFAULT_MODEL
 
     def _generate_content_with_fallback(self, prompt: str) -> Any:
         """
-        Attempt to generate content using the resolved model.
-        If a 404 NOT_FOUND error occurs for a specific model alias, try fallback candidates dynamically.
+        Generate content using Groq's OpenAI-compatible Chat Completions API.
         """
-        candidate_models = [self.model]
-        for fallback in [
-            "gemini-2.0-flash",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-pro",
-        ]:
-            if fallback not in candidate_models and fallback.lower() != self.model.lower():
-                candidate_models.append(fallback)
-
-        last_error = None
-        for model_to_try in candidate_models:
-            try:
-                logger.info("Calling generate_content with Gemini model: '%s'", model_to_try)
-                response = self.client.models.generate_content(
-                    model=model_to_try,
-                    contents=prompt,
-                )
-                if model_to_try != self.model:
-                    logger.info(
-                        "Updated active BIAgent model from '%s' to working model '%s'",
-                        self.model,
-                        model_to_try,
-                    )
-                    self.model = model_to_try
-                return response
-            except Exception as e:
-                err_str = str(e)
-                last_error = e
-                if "404" in err_str or "NOT_FOUND" in err_str or "not found" in err_str.lower():
-                    logger.warning(
-                        "Gemini model '%s' returned 404/NOT_FOUND. Retrying with next candidate...",
-                        model_to_try,
-                    )
-                    continue
-                else:
-                    raise e
-
-        if last_error:
-            raise last_error
+        logger.info("Calling Groq Chat Completions with model: '%s'", self.model)
+        return self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
 
     def _build_context(
         self,
@@ -206,11 +125,10 @@ class BIAgent:
 
     def _extract_response_text(self, response: Any) -> str | None:
         """
-        Safely extract text content from a Gemini API response.
-        Handles safety filter blocks, empty text, or partial response objects.
+        Safely extract text content from an OpenAI-compatible chat completion.
 
         Args:
-            response: Response object returned by genai.Client.models.generate_content().
+            response: Response object returned by client.chat.completions.create().
 
         Returns:
             str | None: Cleaned text string or None if unavailable.
@@ -218,33 +136,14 @@ class BIAgent:
         if not response:
             return None
 
-        # 1. Attempt standard property access
+        # 1. Attempt the standard OpenAI-compatible response shape.
         try:
-            text = response.text
+            choices = getattr(response, "choices", None)
+            text = choices[0].message.content if choices else None
             if text and text.strip():
                 return text.strip()
         except Exception as e:
-            logger.warning("Standard response.text property access threw warning/error: %s", e)
-
-        # 2. Inspect candidate parts directly if response.text raised exception or was empty
-        try:
-            candidates = getattr(response, "candidates", None)
-            if candidates and len(candidates) > 0:
-                first_candidate = candidates[0]
-                finish_reason = getattr(first_candidate, "finish_reason", None)
-                if finish_reason:
-                    logger.warning("Gemini candidate finish_reason: %s", finish_reason)
-
-                content = getattr(first_candidate, "content", None)
-                if content and getattr(content, "parts", None):
-                    parts = content.parts
-                    extracted = "".join(
-                        getattr(p, "text", "") for p in parts if getattr(p, "text", None)
-                    ).strip()
-                    if extracted:
-                        return extracted
-        except Exception as inner_e:
-            logger.warning("Error while inspecting candidate parts: %s", inner_e)
+            logger.warning("Standard chat completion content access threw warning/error: %s", e)
 
         return None
 
@@ -296,15 +195,15 @@ class BIAgent:
             "Please provide your professional analysis:"
         )
 
-        # 3. Request content generation from Google Gemini API with robust model fallback & quota handling
+        # 3. Request content generation from Groq.
         answer_text = None
         try:
             response = self._generate_content_with_fallback(full_prompt)
             answer_text = self._extract_response_text(response)
             if answer_text:
-                logger.info("Successfully generated Gemini AI response for user question.")
+                logger.info("Successfully generated Groq AI response for user question.")
             else:
-                logger.warning("Gemini API returned an empty or safety-filtered response.")
+                logger.warning("Groq API returned an empty response.")
                 answer_text = (
                     "The AI response was unavailable or blocked by safety filters. "
                     "Please rephrase your question or consult the executive dashboard metrics directly."
@@ -312,12 +211,12 @@ class BIAgent:
 
         except Exception as e:
             err_msg = str(e)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
-                logger.warning("Gemini API Quota Exceeded (429 RESOURCE_EXHAUSTED): %s", e)
+            if "429" in err_msg or "quota" in err_msg.lower():
+                logger.warning("Groq API quota or rate limit exceeded: %s", e)
                 answer_text = "The AI service has reached its usage quota. Please try again later."
             else:
-                logger.error("Error calling Gemini API in BIAgent.answer_question: %s", e, exc_info=True)
-                answer_text = "AI Service Error: Unable to complete request with Gemini API. Please try again later."
+                logger.error("Error calling Groq API in BIAgent.answer_question: %s", e, exc_info=True)
+                answer_text = "AI Service Error: Unable to complete request with Groq API. Please try again later."
 
         return {
             "answer": answer_text,
@@ -378,9 +277,9 @@ class BIAgent:
             response = self._generate_content_with_fallback(full_prompt)
             report_text = self._extract_response_text(response)
             if report_text:
-                logger.info("Successfully generated executive leadership report with Gemini API.")
+                logger.info("Successfully generated executive leadership report with Groq API.")
             else:
-                logger.warning("Gemini API returned an empty or safety-filtered report response.")
+                logger.warning("Groq API returned an empty report response.")
                 report_text = (
                     "# Executive Leadership Report\n\n"
                     "*The report generation response was empty or blocked by safety filters. "
@@ -389,17 +288,17 @@ class BIAgent:
 
         except Exception as e:
             err_msg = str(e)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
-                logger.warning("Gemini API Quota Exceeded (429 RESOURCE_EXHAUSTED): %s", e)
+            if "429" in err_msg or "quota" in err_msg.lower():
+                logger.warning("Groq API quota or rate limit exceeded: %s", e)
                 report_text = (
                     "# Executive Leadership Report\n\n"
                     "The AI service has reached its usage quota. Please try again later."
                 )
             else:
-                logger.error("Error generating leadership report with Gemini API: %s", e, exc_info=True)
+                logger.error("Error generating leadership report with Groq API: %s", e, exc_info=True)
                 report_text = (
                     "# Executive Report Generation Error\n\n"
-                    "AI Service Error: Unable to complete request with Gemini API. Please try again later."
+                    "AI Service Error: Unable to complete request with Groq API. Please try again later."
                 )
 
         iso_now = datetime.now(timezone.utc).isoformat()

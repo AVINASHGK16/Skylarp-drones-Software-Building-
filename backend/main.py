@@ -51,7 +51,7 @@ def initialize_app_data(app: FastAPI) -> None:
     api_key = os.getenv("MONDAY_API_KEY")
     deals_board_id = os.getenv("DEALS_BOARD_ID")
     wo_board_id = os.getenv("WORK_ORDERS_BOARD_ID")
-    gemini_key = os.getenv("GEMINI_API_KEY")
+    groq_key = os.getenv("GROQ_API_KEY")
 
     raw_deals: list[dict] = []
     raw_work_orders: list[dict] = []
@@ -105,12 +105,12 @@ def initialize_app_data(app: FastAPI) -> None:
     quality_report = generate_data_quality_report(deals_df, wo_df)
     dashboard_metrics = generate_dashboard_metrics(deals_df, wo_df)
 
-    # Initialize BI Agent singleton if Gemini key present
+    # Initialize BI Agent singleton if Groq key present
     bi_agent = None
-    if gemini_key and gemini_key != "your_gemini_api_key_here":
+    if groq_key and groq_key != "your_groq_api_key_here":
         try:
-            bi_agent = BIAgent(api_key=gemini_key)
-            logger.info("BIAgent singleton successfully initialized with Gemini API.")
+            bi_agent = BIAgent(api_key=groq_key)
+            logger.info("BIAgent singleton successfully initialized with Groq API.")
         except Exception as e:
             logger.error("Failed to initialize BIAgent at startup: %s", e)
 

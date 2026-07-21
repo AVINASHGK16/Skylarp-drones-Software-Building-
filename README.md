@@ -1,6 +1,6 @@
 # Monday.com Business Intelligence Agent
 
-An end-to-end, production-ready **Executive Business Intelligence (BI) Platform & AI Strategy Advisor** powered by **Monday.com GraphQL v2 API**, **FastAPI**, **Pandas**, **Recharts**, and **Google Gemini API (`google-genai` SDK - `gemini-1.5-flash`)**.
+An end-to-end, production-ready **Executive Business Intelligence (BI) Platform & AI Strategy Advisor** powered by **Monday.com GraphQL v2 API**, **FastAPI**, **Pandas**, **Recharts**, and the **Groq API** via the official OpenAI-compatible Python client (`openai`).
 
 ---
 
@@ -8,7 +8,7 @@ An end-to-end, production-ready **Executive Business Intelligence (BI) Platform 
 
 - **Automated Data Pipeline**: Seamlessly fetches, paginates, cleans, and standardizes Monday.com board data (Deals Funnel & Work Orders Tracker) with zero manual intervention.
 - **Deterministic Analytics Engine**: Pre-computes all business KPIs (Pipeline Value, Sector Breakdown, Sales Stage Velocity, Billing Realization %, Work Order Fulfillment, Top Customers) in-memory without side-effects.
-- **AI Strategy Advisor**: Natural language Q&A and Executive Leadership Report generation powered by Google Gemini API (`gemini-1.5-flash`), grounded strictly in pre-computed metrics.
+- **AI Strategy Advisor**: Natural language Q&A and Executive Leadership Report generation powered by Groq (`openai/gpt-oss-120b`), grounded strictly in pre-computed metrics.
 - **Interactive Executive Dashboard**: Dynamic dark-mode analytics dashboard built with React and Recharts, featuring responsive charts, KPI cards, and live backend connection indicators.
 - **Data Quality Audit**: Automatic data quality report generation and caveat tracking for 100% analytical transparency.
 
@@ -22,7 +22,7 @@ graph TD
     B -->|Raw Dictionaries| C[Data Cleaner Service]
     C -->|Clean DataFrames| D[Analytics Engine]
     D -->|Cached Dashboard Metrics| E[FastAPI REST API / Memory State]
-    E -->|Context Prompt| F[BI Agent / Google Gemini 1.5 Flash]
+    E -->|Context Prompt| F[BI Agent / Groq GPT-OSS 120B]
     E -->|GET /metrics| G[React Executive Dashboard]
     E -->|POST /ask & GET /leadership-report| H[React AI Assistant Interface]
 ```
@@ -35,7 +35,7 @@ graph TD
 | --- | --- | --- |
 | **Backend Framework** | Python 3.12, FastAPI, Uvicorn | High-performance asynchronous REST API service |
 | **Data Processing** | Pandas, OpenPyXL | Data cleaning, type normalization, and KPI calculations |
-| **AI Integration** | Google GenAI SDK (`google-genai`) | `gemini-1.5-flash` for strategic advice and report generation |
+| **AI Integration** | OpenAI Python client (`openai`) configured for Groq | `openai/gpt-oss-120b` for strategic advice and report generation |
 | **Frontend Framework** | React 18, Vite | Modular component architecture with fast HMR |
 | **Styling & Icons** | Tailwind CSS, Lucide React | Modern executive dark-mode UI with dynamic badges |
 | **Data Visualization**| Recharts | Responsive bar, donut, and line charts |
@@ -56,7 +56,7 @@ Skylarp-drones-Software-Building-/
 │   │   ├── monday_service.py      # Monday.com GraphQL v2 client & pagination
 │   │   ├── data_cleaner.py        # Data cleaning, normalization, & quality report
 │   │   ├── analytics_engine.py    # Business KPI calculations (deterministic)
-│   │   └── bi_agent.py            # Google Gemini LLM integration & report generation
+│   │   └── bi_agent.py            # Groq LLM integration & report generation
 │   ├── tests/
 │   │   ├── test_data_cleaner.py
 │   │   ├── test_analytics_engine.py
@@ -105,7 +105,8 @@ Skylarp-drones-Software-Building-/
 ### Backend Configuration (`backend/.env`)
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-120b
 MONDAY_API_KEY=your_monday_api_key_here
 MONDAY_BOARD_ID=your_monday_board_id_here
 DEALS_BOARD_ID=your_deals_board_id_here
@@ -195,7 +196,7 @@ Access the interactive OpenAPI Swagger documentation at: `http://localhost:8000/
    - **Environment**: Python 3.12
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add Environment Variables on Render dashboard (`GEMINI_API_KEY`, `MONDAY_API_KEY`, `DEALS_BOARD_ID`, `WORK_ORDERS_BOARD_ID`).
+4. Add Environment Variables on Render dashboard (`GROQ_API_KEY`, `MONDAY_API_KEY`, `DEALS_BOARD_ID`, `WORK_ORDERS_BOARD_ID`). `GROQ_MODEL` is optional and defaults to `openai/gpt-oss-120b`.
 
 ### Deploying Frontend on Vercel
 
