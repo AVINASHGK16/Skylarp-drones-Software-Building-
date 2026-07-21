@@ -1,5 +1,36 @@
 # Monday.com Business Intelligence Agent
+Avinash G K
 
+Software Engineering Candidate
+
+Built as an Executive Business Intelligence platform demonstrating:
+
+- FastAPI
+- React
+- Data Engineering
+- AI Integration
+- REST APIs
+- Production Deployment
+- ## 🌐 Live Demo
+
+### Frontend (Vercel)
+
+**Application:**  
+https://skylarp-drones-software-building.vercel.app/
+
+### Backend API (Render)
+
+**REST API:**  
+https://skylarp-drones-software-building.onrender.com/
+
+### API Documentation (Swagger)
+
+https://skylarp-drones-software-building.onrender.com/docs
+
+### Source Code
+
+GitHub Repository:  
+https://github.com/AVINASHGK16/Skylarp-drones-Software-Building-
 An end-to-end, production-ready **Executive Business Intelligence (BI) Platform & AI Strategy Advisor** powered by **Monday.com GraphQL v2 API**, **FastAPI**, **Pandas**, **Recharts**, and the **Groq API** via the official OpenAI-compatible Python client (`openai`).
 
 ---
@@ -216,5 +247,3 @@ Access the interactive OpenAPI Swagger documentation at: `http://localhost:8000/
 - [ ] Historical trend snapshot comparison over multi-year periods.
 - [ ] User role-based access control (RBAC) for executive views.
 
----
-*Maintained by Skylark Drones Software Engineering Team*
