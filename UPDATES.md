@@ -38,31 +38,38 @@
 
 ### 4. Frontend Component Architecture & API Integration (`frontend/`)
 - Created centralized API client [frontend/src/api/api.js](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/api/api.js):
-  - `askQuestion(question)` -> `POST /ask`
-  - `getMetrics()` -> `GET /metrics`
-  - `getLeadershipReport()` -> `GET /leadership-report`
+  - Configured environment variable `VITE_API_URL`.
+  - Added `checkHealth()` -> `GET /health`.
+  - `askQuestion(question)` -> `POST /ask`.
+  - `getMetrics()` -> `GET /metrics`.
+  - `getLeadershipReport()` -> `GET /leadership-report`.
 - Created reusable UI components:
-  - [frontend/src/components/Header.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/Header.jsx): Navigation header with live status badge and tab switcher ('AI Assistant' vs 'Dashboard').
+  - [frontend/src/components/Header.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/Header.jsx): Navigation header with live health connection polling (`🟢 Backend Connected` / `🔴 Backend Offline`) and tab switcher ('AI Assistant' vs 'Dashboard').
   - [frontend/src/components/LeadershipButton.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/LeadershipButton.jsx): Executive report trigger button.
   - [frontend/src/components/ChatWindow.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatWindow.jsx): Scrollable chat feed with auto-scroll and loading indicators.
-  - [frontend/src/components/ChatMessage.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatMessage.jsx): Markdown response renderer using `react-markdown` and `remark-gfm`.
+  - [frontend/src/components/ChatMessage.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatMessage.jsx): Markdown response renderer with export options (`Export .MD` and `Export .TXT`).
   - [frontend/src/components/DataQualityBadge.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/DataQualityBadge.jsx): Expandable caveat notes badge.
   - [frontend/src/components/ChatInput.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/ChatInput.jsx): Auto-resizing textarea with suggestion chips.
 
 ### 5. Executive Dashboard & Recharts Integration (`frontend/`)
 - Created custom hook [frontend/src/hooks/useDashboard.js](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/hooks/useDashboard.js):
-  - Fetches and caches metrics from `GET /metrics` with session state management and retry handlers.
-- Installed `recharts` for interactive responsive charting.
+  - Fetches and caches metrics from `GET /metrics` with session state management and `lastUpdated` timestamp tracking.
 - Created dashboard components:
-  - [frontend/src/components/dashboard/Dashboard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/Dashboard.jsx): Main dashboard container with skeleton loaders, retry error state, and 2-column responsive grid layout.
-  - [frontend/src/components/dashboard/KPICards.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/KPICards.jsx): 4 top summary cards (Pipeline Value, Average Deal Size, Billing %, Work Order Completion %).
+  - [frontend/src/components/dashboard/Dashboard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/Dashboard.jsx): Main container with skeleton loaders, `Refresh Dashboard` button, `Last Updated` timestamp display, and 2-column responsive layout.
+  - [frontend/src/components/dashboard/KPICards.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/KPICards.jsx): 4 summary cards.
   - [frontend/src/components/dashboard/RevenueBySectorChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/RevenueBySectorChart.jsx): Responsive Bar Chart.
-  - [frontend/src/components/dashboard/RevenueByStageChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/RevenueByStageChart.jsx): Responsive Donut/Pie Chart.
+  - [frontend/src/components/dashboard/RevenueByStageChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/RevenueByStageChart.jsx): Responsive Donut Chart.
   - [frontend/src/components/dashboard/MonthlyPipelineChart.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/MonthlyPipelineChart.jsx): Responsive Line Chart.
-  - [frontend/src/components/dashboard/TopCustomersTable.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/TopCustomersTable.jsx): Top 10 customer revenue table.
-  - [frontend/src/components/dashboard/BillingSummaryCard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/BillingSummaryCard.jsx): Financial realization & backlog card.
-  - [frontend/src/components/dashboard/WorkOrderCard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/WorkOrderCard.jsx): Operational fulfillment status distribution card.
-- Verified production build (`npm run build`) successfully.
+  - [frontend/src/components/dashboard/TopCustomersTable.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/TopCustomersTable.jsx): Top 10 customer table.
+  - [frontend/src/components/dashboard/BillingSummaryCard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/BillingSummaryCard.jsx): Financial realization card.
+  - [frontend/src/components/dashboard/WorkOrderCard.jsx](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/src/components/dashboard/WorkOrderCard.jsx): Operational status card.
+
+### 6. Production Readiness & Deployment (`backend/` & `frontend/`)
+- Created [backend/.env.example](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/backend/.env.example) and [frontend/.env.example](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/.env.example).
+- Created Vercel configuration [frontend/vercel.json](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/vercel.json) for frontend deployment.
+- Created Render configuration [backend/render.yaml](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/backend/render.yaml) for FastAPI backend deployment.
+- Generated comprehensive root [README.md](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/README.md) with architecture diagram, feature breakdown, setup instructions, API specs, and deployment guide.
+- Verified production build (`npm run build`) and backend tests (`test_api.py`) with 100% success rate.
 
 ---
 
@@ -74,6 +81,7 @@
 | `OPENAI_API_KEY` | API Key for OpenAI services |
 | `DEALS_BOARD_ID` | Board ID for Deals tracking |
 | `WORK_ORDERS_BOARD_ID` | Board ID for Work Orders tracking |
+| `VITE_API_URL` | Base API URL for FastAPI backend (defaults to `http://localhost:8000`) |
 
 ---
 *Last updated: July 21, 2026*

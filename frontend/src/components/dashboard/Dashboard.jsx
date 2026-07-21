@@ -7,17 +7,17 @@ import MonthlyPipelineChart from './MonthlyPipelineChart';
 import TopCustomersTable from './TopCustomersTable';
 import BillingSummaryCard from './BillingSummaryCard';
 import WorkOrderCard from './WorkOrderCard';
-import { RefreshCw, AlertTriangle, BarChart2 } from 'lucide-react';
+import { RefreshCw, AlertTriangle, BarChart2, Clock } from 'lucide-react';
 
 export default function Dashboard() {
-  const { metrics, loading, error, refreshMetrics } = useDashboard();
+  const { metrics, loading, error, lastUpdated, refreshMetrics } = useDashboard();
 
-  if (loading) {
+  if (loading && !metrics) {
     return (
       <div className="p-6 max-w-7xl mx-auto space-y-6 animate-pulse">
         <div className="flex items-center justify-between">
           <div className="h-8 bg-slate-800 rounded-lg w-64" />
-          <div className="h-9 bg-slate-800 rounded-lg w-28" />
+          <div className="h-9 bg-slate-800 rounded-lg w-36" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[1, 2, 3, 4].map((i) => (
@@ -32,7 +32,7 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
+  if (error && !metrics) {
     return (
       <div className="p-12 max-w-xl mx-auto text-center space-y-4">
         <div className="w-14 h-14 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto border border-red-500/20">
@@ -53,7 +53,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Dashboard Title & Actions */}
+      {/* Dashboard Header Title & Refresh Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center space-x-2">
@@ -65,13 +65,23 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <button
-          onClick={refreshMetrics}
-          className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm self-start sm:self-auto"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Refresh Metrics</span>
-        </button>
+        <div className="flex items-center space-x-3 self-start sm:self-auto">
+          {lastUpdated && (
+            <div className="flex items-center text-xs text-slate-400 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-xl">
+              <Clock className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
+              <span>Last Updated: {lastUpdated}</span>
+            </div>
+          )}
+
+          <button
+            onClick={refreshMetrics}
+            disabled={loading}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-slate-200 border border-slate-700 hover:border-indigo-500/40 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Dashboard</span>
+          </button>
+        </div>
       </div>
 
       {/* Top 4 KPI Summary Cards */}

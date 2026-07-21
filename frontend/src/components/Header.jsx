@@ -1,8 +1,37 @@
-import React from 'react';
-import { Bot, Activity, MessageSquare, LayoutDashboard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bot, MessageSquare, LayoutDashboard } from 'lucide-react';
 import LeadershipButton from './LeadershipButton';
+import { checkHealth } from '../api/api';
 
 export default function Header({ activeTab, setActiveTab, onGenerateReport, reportLoading }) {
+  const [isConnected, setIsConnected] = useState(true);
+
+  // Poll backend health status
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyBackendHealth = async () => {
+      try {
+        const res = await checkHealth();
+        if (isMounted) {
+          setIsConnected(res?.status === 'healthy');
+        }
+      } catch (err) {
+        if (isMounted) {
+          setIsConnected(false);
+        }
+      }
+    };
+
+    verifyBackendHealth();
+    const interval = setInterval(verifyBackendHealth, 10000); // Poll every 10 seconds
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <header className="bg-slate-950/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 px-6 py-3.5">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
@@ -14,10 +43,19 @@ export default function Header({ activeTab, setActiveTab, onGenerateReport, repo
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl font-bold text-slate-100 tracking-tight">Monday.com BI Agent</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Activity className="w-3 h-3 mr-1 animate-pulse" />
-                Live API
-              </span>
+
+              {/* Connection Status Badge */}
+              {isConnected ? (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
+                  Backend Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+                  <span className="w-2 h-2 rounded-full bg-red-400 mr-1.5 animate-ping" />
+                  Backend Offline
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400">Executive Business Intelligence & Strategy Advisor</p>
           </div>

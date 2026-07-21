@@ -1,12 +1,31 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { Bot, User, FileSpreadsheet, Sparkles, Download, FileText } from 'lucide-react';
 import DataQualityBadge from './DataQualityBadge';
 
 export default function ChatMessage({ message }) {
   const isUser = message.sender === 'user';
   const isReport = message.isReport;
+
+  /**
+   * Export cached report as Markdown (.md) or Plain Text (.txt) file without regenerating
+   */
+  const handleExport = (format) => {
+    if (!message.text) return;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `Executive_Leadership_Report_${dateStr}.${format}`;
+    const mimeType = format === 'md' ? 'text/markdown;charset=utf-8;' : 'text/plain;charset=utf-8;';
+    const blob = new Blob([message.text], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className={`py-4 px-4 sm:px-6 transition-colors ${isUser ? 'bg-slate-900/40' : 'bg-slate-800/30'}`}>
@@ -30,19 +49,43 @@ export default function ChatMessage({ message }) {
 
         {/* Content */}
         <div className="flex-1 overflow-hidden space-y-2">
-          {/* Header info */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-semibold text-slate-200">
-              {isUser ? 'You' : isReport ? 'Executive Leadership Report' : 'BI Agent'}
-            </span>
-            <span className="text-xs text-slate-500">
-              {message.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-            {!isUser && !isReport && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                <Sparkles className="w-2.5 h-2.5 mr-1" />
-                GPT-4o mini
+          {/* Header info & Export Actions */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-semibold text-slate-200">
+                {isUser ? 'You' : isReport ? 'Executive Leadership Report' : 'BI Agent'}
               </span>
+              <span className="text-xs text-slate-500">
+                {message.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              {!isUser && !isReport && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  <Sparkles className="w-2.5 h-2.5 mr-1" />
+                  GPT-4o mini
+                </span>
+              )}
+            </div>
+
+            {/* Export buttons for Executive Leadership Report */}
+            {isReport && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleExport('md')}
+                  className="inline-flex items-center space-x-1 text-[11px] font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-md transition-all cursor-pointer"
+                  title="Export report as Markdown file"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Export .MD</span>
+                </button>
+                <button
+                  onClick={() => handleExport('txt')}
+                  className="inline-flex items-center space-x-1 text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded-md transition-all cursor-pointer"
+                  title="Export report as Plain Text file"
+                >
+                  <FileText className="w-3 h-3" />
+                  <span>Export .TXT</span>
+                </button>
+              </div>
             )}
           </div>
 

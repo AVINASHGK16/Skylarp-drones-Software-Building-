@@ -3,7 +3,10 @@
  * Centralizes all HTTP communication with the FastAPI backend service.
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  'http://localhost:8000';
 
 /**
  * Helper function to perform fetch requests with error handling.
@@ -28,7 +31,9 @@ async function request(endpoint, options = {}) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const errorMessage =
-        errorData.detail || errorData.message || `HTTP Error ${response.status}: ${response.statusText}`;
+        errorData.detail ||
+        errorData.message ||
+        `HTTP Error ${response.status}: ${response.statusText}`;
       throw new Error(errorMessage);
     }
     return await response.json();
@@ -36,6 +41,16 @@ async function request(endpoint, options = {}) {
     console.error(`API Error on [${options.method || 'GET'} ${endpoint}]:`, error);
     throw error;
   }
+}
+
+/**
+ * Check backend connection health status.
+ * @returns {Promise<{status: string}>}
+ */
+export async function checkHealth() {
+  return request('/health', {
+    method: 'GET',
+  });
 }
 
 /**
