@@ -12,11 +12,10 @@ export default function Header({ activeTab, setActiveTab, onGenerateReport, repo
 
     const verifyBackendHealth = async () => {
       try {
-        const res = await checkHealth();
+        await checkHealth();
         if (isMounted) {
-          // As long as /health returns 200 OK with healthy status, backend is ONLINE
-          const isHealthy = res && (res.status === 'healthy' || res.status === 'ok' || Boolean(res));
-          setIsConnected(Boolean(isHealthy));
+          // checkHealth only resolves for an HTTP 200 response from GET /health.
+          setIsConnected(true);
         }
       } catch (err) {
         if (isMounted) {

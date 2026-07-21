@@ -3,19 +3,20 @@
  * Centralizes all HTTP communication with the FastAPI backend service.
  */
 
-const RAW_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  'http://localhost:8000';
+const RAW_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Strip any trailing slashes to avoid double-slash URL construction issues
-const BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
+const BASE_URL = RAW_BASE_URL.trim().replace(/\/+$/, '');
+
+function buildApiUrl(endpoint) {
+  return `${BASE_URL}/${endpoint.replace(/^\/+/, '')}`;
+}
 
 /**
  * Helper function to perform fetch requests with error handling.
  */
 async function request(endpoint, options = {}) {
-  const url = `${BASE_URL}${endpoint}`;
+  const url = buildApiUrl(endpoint);
   const defaultHeaders = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -52,9 +53,16 @@ async function request(endpoint, options = {}) {
  * @returns {Promise<{status: string}>}
  */
 export async function checkHealth() {
-  return request('/health', {
+  const response = await fetch(buildApiUrl('/health'), {
     method: 'GET',
+    headers: { Accept: 'application/json' },
   });
+
+  if (!response.ok) {
+    throw new Error(`Health check failed with HTTP ${response.status}`);
+  }
+
+  return response.json();
 }
 
 /**
