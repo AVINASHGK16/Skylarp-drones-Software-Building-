@@ -1,6 +1,6 @@
 # Monday.com Business Intelligence Agent
 
-An end-to-end, production-ready **Executive Business Intelligence (BI) Platform & AI Strategy Advisor** powered by **Monday.com GraphQL v2 API**, **FastAPI**, **Pandas**, **Recharts**, and **Google Gemini API (`google-genai` SDK - `gemini-2.5-flash`)**.
+An end-to-end, production-ready **Executive Business Intelligence (BI) Platform & AI Strategy Advisor** powered by **Monday.com GraphQL v2 API**, **FastAPI**, **Pandas**, **Recharts**, and **Google Gemini API (`google-genai` SDK - `gemini-1.5-flash`)**.
 
 ---
 
@@ -8,7 +8,7 @@ An end-to-end, production-ready **Executive Business Intelligence (BI) Platform 
 
 - **Automated Data Pipeline**: Seamlessly fetches, paginates, cleans, and standardizes Monday.com board data (Deals Funnel & Work Orders Tracker) with zero manual intervention.
 - **Deterministic Analytics Engine**: Pre-computes all business KPIs (Pipeline Value, Sector Breakdown, Sales Stage Velocity, Billing Realization %, Work Order Fulfillment, Top Customers) in-memory without side-effects.
-- **AI Strategy Advisor**: Natural language Q&A and Executive Leadership Report generation powered by Google Gemini API (`gemini-2.5-flash`), grounded strictly in pre-computed metrics.
+- **AI Strategy Advisor**: Natural language Q&A and Executive Leadership Report generation powered by Google Gemini API (`gemini-1.5-flash`), grounded strictly in pre-computed metrics.
 - **Interactive Executive Dashboard**: Dynamic dark-mode analytics dashboard built with React and Recharts, featuring responsive charts, KPI cards, and live backend connection indicators.
 - **Data Quality Audit**: Automatic data quality report generation and caveat tracking for 100% analytical transparency.
 
@@ -22,7 +22,7 @@ graph TD
     B -->|Raw Dictionaries| C[Data Cleaner Service]
     C -->|Clean DataFrames| D[Analytics Engine]
     D -->|Cached Dashboard Metrics| E[FastAPI REST API / Memory State]
-    E -->|Context Prompt| F[BI Agent / Google Gemini 2.5 Flash]
+    E -->|Context Prompt| F[BI Agent / Google Gemini 1.5 Flash]
     E -->|GET /metrics| G[React Executive Dashboard]
     E -->|POST /ask & GET /leadership-report| H[React AI Assistant Interface]
 ```
@@ -35,7 +35,7 @@ graph TD
 | --- | --- | --- |
 | **Backend Framework** | Python 3.12, FastAPI, Uvicorn | High-performance asynchronous REST API service |
 | **Data Processing** | Pandas, OpenPyXL | Data cleaning, type normalization, and KPI calculations |
-| **AI Integration** | Google GenAI SDK (`google-genai`) | `gemini-2.5-flash` for strategic advice and report generation |
+| **AI Integration** | Google GenAI SDK (`google-genai`) | `gemini-1.5-flash` for strategic advice and report generation |
 | **Frontend Framework** | React 18, Vite | Modular component architecture with fast HMR |
 | **Styling & Icons** | Tailwind CSS, Lucide React | Modern executive dark-mode UI with dynamic badges |
 | **Data Visualization**| Recharts | Responsive bar, donut, and line charts |

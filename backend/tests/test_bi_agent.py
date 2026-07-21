@@ -19,7 +19,7 @@ def test_bi_agent_init():
 
     # Test explicit API key initialization with Gemini
     agent = BIAgent(api_key="fake-gemini-key")
-    assert agent.model == "gemini-2.5-flash"
+    assert agent.model == "gemini-1.5-flash"
     print("test_bi_agent_init initialization PASSED")
 
 

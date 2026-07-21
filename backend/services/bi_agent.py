@@ -36,7 +36,7 @@ class BIAgent:
     Uses Google Gemini models to interpret analytics_engine KPIs.
     """
 
-    DEFAULT_MODEL = "gemini-2.5-flash"
+    DEFAULT_MODEL = "gemini-1.5-flash"
 
     def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
         """
@@ -45,7 +45,7 @@ class BIAgent:
         Args:
             api_key: Optional Gemini API key. If not provided, it is loaded
                      from the GEMINI_API_KEY environment variable.
-            model: Gemini model identifier to use (defaults to 'gemini-2.5-flash').
+            model: Gemini model identifier to use (defaults to 'gemini-1.5-flash').
 
         Raises:
             ValueError: If GEMINI_API_KEY is not set or provided.
