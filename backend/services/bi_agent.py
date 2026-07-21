@@ -95,6 +95,50 @@ class BIAgent:
 
         return "\n\n".join(context_blocks)
 
+    def _extract_response_text(self, response: Any) -> str | None:
+        """
+        Safely extract text content from a Gemini API response.
+        Handles safety filter blocks, empty text, or partial response objects.
+
+        Args:
+            response: Response object returned by genai.Client.models.generate_content().
+
+        Returns:
+            str | None: Cleaned text string or None if unavailable.
+        """
+        if not response:
+            return None
+
+        # 1. Attempt standard property access
+        try:
+            text = response.text
+            if text and text.strip():
+                return text.strip()
+        except Exception as e:
+            logger.warning("Standard response.text property access threw warning/error: %s", e)
+
+        # 2. Inspect candidate parts directly if response.text raised exception or was empty
+        try:
+            candidates = getattr(response, "candidates", None)
+            if candidates and len(candidates) > 0:
+                first_candidate = candidates[0]
+                finish_reason = getattr(first_candidate, "finish_reason", None)
+                if finish_reason:
+                    logger.warning("Gemini candidate finish_reason: %s", finish_reason)
+
+                content = getattr(first_candidate, "content", None)
+                if content and getattr(content, "parts", None):
+                    parts = content.parts
+                    extracted = "".join(
+                        getattr(p, "text", "") for p in parts if getattr(p, "text", None)
+                    ).strip()
+                    if extracted:
+                        return extracted
+        except Exception as inner_e:
+            logger.warning("Error while inspecting candidate parts: %s", inner_e)
+
+        return None
+
     def answer_question(
         self,
         question: str,
@@ -143,18 +187,29 @@ class BIAgent:
             "Please provide your professional analysis:"
         )
 
-        # 3. Request content generation from Google Gemini API with error handling
+        # 3. Request content generation from Google Gemini API with robust error handling
+        answer_text = None
         try:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=full_prompt,
             )
-            answer_text = response.text or ""
-            logger.info("Successfully generated Gemini AI response for user question.")
+            answer_text = self._extract_response_text(response)
+            if answer_text:
+                logger.info("Successfully generated Gemini AI response for user question.")
+            else:
+                logger.warning("Gemini API returned an empty or safety-filtered response.")
+                answer_text = (
+                    "The AI response was unavailable or blocked by safety filters. "
+                    "Please rephrase your question or consult the executive dashboard metrics directly."
+                )
 
         except Exception as e:
             logger.exception("Error calling Gemini API in BIAgent.answer_question: %s", e)
-            answer_text = f"AI Service Error: Gemini API returned an error ({e})."
+            answer_text = (
+                f"AI Service Error: Unable to complete request with Gemini API ({e}). "
+                "Please verify system credentials and network connectivity."
+            )
 
         return {
             "answer": answer_text,
@@ -210,17 +265,29 @@ class BIAgent:
             f"{context_str}"
         )
 
+        report_text = None
         try:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=full_prompt,
             )
-            report_text = response.text or ""
-            logger.info("Successfully generated executive leadership report with Gemini API.")
+            report_text = self._extract_response_text(response)
+            if report_text:
+                logger.info("Successfully generated executive leadership report with Gemini API.")
+            else:
+                logger.warning("Gemini API returned an empty or safety-filtered report response.")
+                report_text = (
+                    "# Executive Leadership Report\n\n"
+                    "*The report generation response was empty or blocked by safety filters. "
+                    "Please try again or refer to the pre-computed metrics dashboard.*"
+                )
 
         except Exception as e:
             logger.exception("Error generating leadership report with Gemini API: %s", e)
-            report_text = f"# Executive Report Generation Error\n\nGemini API Error ({e})."
+            report_text = (
+                "# Executive Report Generation Error\n\n"
+                f"Unable to generate report due to Gemini API Error ({e})."
+            )
 
         iso_now = datetime.now(timezone.utc).isoformat()
         return {

@@ -97,9 +97,36 @@ def test_generate_leadership_report_mocked(mock_genai_client_cls):
     print("test_generate_leadership_report_mocked PASSED")
 
 
+@patch("services.bi_agent.genai.Client")
+def test_empty_or_blocked_response_fallback(mock_genai_client_cls):
+    mock_client = MagicMock()
+    mock_genai_client_cls.return_value = mock_client
+
+    # Simulate Gemini safety block (response.text raising ValueError)
+    mock_response = MagicMock()
+    type(mock_response).text = property(lambda self: (_ for _ in ()).throw(ValueError("Blocked by safety filters")))
+    mock_client.models.generate_content.return_value = mock_response
+
+    agent = BIAgent(api_key="fake-gemini-key")
+    deals_df = pd.DataFrame()
+    wo_df = pd.DataFrame()
+
+    res_answer = agent.answer_question("Test blocked question", deals_df, wo_df)
+    assert "answer" in res_answer
+    assert "dashboard_metrics" in res_answer
+    assert "unavailable or blocked by safety filters" in res_answer["answer"]
+
+    res_report = agent.generate_leadership_report(deals_df, wo_df)
+    assert "report" in res_report
+    assert "generated_at" in res_report
+    assert "blocked by safety filters" in res_report["report"]
+    print("test_empty_or_blocked_response_fallback PASSED")
+
+
 if __name__ == "__main__":
     test_bi_agent_init()
     test_build_context()
     test_answer_question_mocked()
     test_generate_leadership_report_mocked()
+    test_empty_or_blocked_response_fallback()
     print("\nALL BI AGENT UNIT TESTS PASSED SUCCESSFULLY!")
