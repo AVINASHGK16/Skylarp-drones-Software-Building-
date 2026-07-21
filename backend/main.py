@@ -44,6 +44,8 @@ def initialize_app_data(app: FastAPI) -> None:
     Load data from Monday.com or local Excel files during application startup,
     clean datasets, pre-compute metrics, and cache in memory.
     """
+    # Load environment variables from .env in backend or root
+    load_dotenv(BACKEND_DIR / ".env")
     load_dotenv(ROOT_DIR / ".env")
 
     api_key = os.getenv("MONDAY_API_KEY")
@@ -140,10 +142,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Production CORS Origin Resolution
+default_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+env_origins = os.getenv("ALLOWED_ORIGINS") or os.getenv("FRONTEND_URL")
+if env_origins:
+    custom_origins = [
+        o.strip() for o in env_origins.split(",") if o.strip()
+    ]
+    allowed_origins = list(set(default_origins + custom_origins))
+else:
+    allowed_origins = ["*"]  # Fallback to wildcard if not configured
+
 # Enable CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
