@@ -48,24 +48,6 @@ async function request(endpoint, options = {}) {
 }
 
 /**
- * Check backend connection health status.
- * Executes GET /health and evaluates if the FastAPI server is reachable.
- * @returns {Promise<{status: string}>}
- */
-export async function checkHealth() {
-  const response = await fetch(buildApiUrl('/health'), {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Health check failed with HTTP ${response.status}`);
-  }
-
-  return response.json();
-}
-
-/**
  * Ask a strategic business question to the AI BI Agent.
  * @param {string} question
  * @returns {Promise<{answer: string, dashboard_metrics: object, data_quality_notes: string[]}>}

@@ -1,39 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Bot, MessageSquare, LayoutDashboard } from 'lucide-react';
 import LeadershipButton from './LeadershipButton';
-import { checkHealth } from '../api/api';
 
 export default function Header({ activeTab, setActiveTab, onGenerateReport, reportLoading }) {
-  const [isConnected, setIsConnected] = useState(true);
-
-  // Poll backend health status independently using GET /health
-  useEffect(() => {
-    let isMounted = true;
-
-    const verifyBackendHealth = async () => {
-      try {
-        await checkHealth();
-        if (isMounted) {
-          // checkHealth only resolves for an HTTP 200 response from GET /health.
-          setIsConnected(true);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.warn('Backend health check poll failed:', err);
-          setIsConnected(false);
-        }
-      }
-    };
-
-    verifyBackendHealth();
-    const interval = setInterval(verifyBackendHealth, 10000); // Poll every 10 seconds
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
   return (
     <header className="bg-slate-950/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 px-6 py-3.5">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
@@ -43,22 +12,7 @@ export default function Header({ activeTab, setActiveTab, onGenerateReport, repo
             <Bot className="w-6 h-6 text-white" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-xl font-bold text-slate-100 tracking-tight">Monday.com BI Agent</h1>
-
-              {/* Connection Status Badge (Strictly reflects GET /health) */}
-              {isConnected ? (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
-                  Backend Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
-                  <span className="w-2 h-2 rounded-full bg-red-400 mr-1.5 animate-ping" />
-                  Backend Offline
-                </span>
-              )}
-            </div>
+            <h1 className="text-xl font-bold text-slate-100 tracking-tight">Monday.com BI Agent</h1>
             <p className="text-xs text-slate-400">Executive Business Intelligence & Strategy Advisor</p>
           </div>
         </div>
