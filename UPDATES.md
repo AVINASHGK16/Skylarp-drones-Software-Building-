@@ -19,7 +19,7 @@
   - Core business analytics module computing KPIs without side-effects or external API calls.
   - Functions for pipeline summary, sector revenue, stage revenue, monthly pipeline, work order summary, billing summary, top customers, execution metrics, and master dashboard metrics.
 - Created [backend/services/bi_agent.py](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/backend/services/bi_agent.py):
-  - Class `BIAgent` using official OpenAI Python SDK (`gpt-4o-mini` default) to answer executive business questions and generate leadership reports.
+  - Class `BIAgent` using Google GenAI SDK (`google-genai` with `gemini-2.5-flash` model) to answer executive business questions and generate leadership reports.
   - Consumes pre-computed metrics without recalculating KPIs.
 
 ### 3. FastAPI REST API Integration Layer (`backend/`)
@@ -68,8 +68,13 @@
 - Created [backend/.env.example](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/backend/.env.example) and [frontend/.env.example](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/.env.example).
 - Created Vercel configuration [frontend/vercel.json](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/frontend/vercel.json) for frontend deployment.
 - Created Render configuration [backend/render.yaml](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/backend/render.yaml) for FastAPI backend deployment.
-- Generated comprehensive root [README.md](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/README.md) with architecture diagram, feature breakdown, setup instructions, API specs, and deployment guide.
-- Verified production build (`npm run build`) and backend tests (`test_api.py`) with 100% success rate.
+- Generated comprehensive root [README.md](file:///c:/Users/g/OneDrive/Documents/Skylarp%20drones/Skylarp-drones-Software-Building-/README.md).
+
+### 7. Google Gemini Migration (`google-genai` & `gemini-2.5-flash`)
+- Replaced `openai` dependency with `google-genai` in `backend/requirements.txt`.
+- Replaced OpenAI client & completion calls in `backend/services/bi_agent.py` with `from google import genai` and `genai.Client(api_key=...)` using model `gemini-2.5-flash`.
+- Replaced `OPENAI_API_KEY` with `GEMINI_API_KEY` across `.env.example`, `backend/.env.example`, `backend/render.yaml`, `backend/main.py`, `backend/verify_pipeline.py`, `backend/tests/test_bi_agent.py`, and `README.md`.
+- Verified all unit and FastAPI integration tests pass with 100% success rate.
 
 ---
 
@@ -78,7 +83,7 @@
 | Variable | Description |
 | --- | --- |
 | `MONDAY_API_KEY` | API Key for Monday.com GraphQL API |
-| `OPENAI_API_KEY` | API Key for OpenAI services |
+| `GEMINI_API_KEY` | API Key for Google Gemini services (`google-genai`) |
 | `DEALS_BOARD_ID` | Board ID for Deals tracking |
 | `WORK_ORDERS_BOARD_ID` | Board ID for Work Orders tracking |
 | `VITE_API_URL` | Base API URL for FastAPI backend (defaults to `http://localhost:8000`) |

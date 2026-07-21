@@ -17,14 +17,14 @@ def test_bi_agent_init():
     except ValueError as e:
         print("test_bi_agent_init missing key test PASSED:", e)
 
-    # Test explicit API key initialization
-    agent = BIAgent(api_key="sk-fake-test-key")
-    assert agent.model == "gpt-4o-mini"
+    # Test explicit API key initialization with Gemini
+    agent = BIAgent(api_key="fake-gemini-key")
+    assert agent.model == "gemini-2.5-flash"
     print("test_bi_agent_init initialization PASSED")
 
 
 def test_build_context():
-    agent = BIAgent(api_key="sk-fake-test-key")
+    agent = BIAgent(api_key="fake-gemini-key")
     mock_metrics = {
         "pipeline_summary": {"total_pipeline_value": 1000.0, "total_deals": 5},
         "revenue_by_sector": {"Mining": 1000.0},
@@ -44,19 +44,17 @@ def test_build_context():
     print("test_build_context PASSED")
 
 
-@patch("services.bi_agent.OpenAI")
-def test_answer_question_mocked(mock_openai_cls):
-    # Setup mock OpenAI client response
+@patch("services.bi_agent.genai.Client")
+def test_answer_question_mocked(mock_genai_client_cls):
+    # Setup mock Gemini client response
     mock_client = MagicMock()
-    mock_openai_cls.return_value = mock_client
-    
-    mock_completion = MagicMock()
-    mock_completion.choices = [
-        MagicMock(message=MagicMock(content="Analysis: Total pipeline value is strong at 100k."))
-    ]
-    mock_client.chat.completions.create.return_value = mock_completion
+    mock_genai_client_cls.return_value = mock_client
 
-    agent = BIAgent(api_key="sk-fake-test-key")
+    mock_response = MagicMock()
+    mock_response.text = "Analysis: Total pipeline value is strong at 100k."
+    mock_client.models.generate_content.return_value = mock_response
+
+    agent = BIAgent(api_key="fake-gemini-key")
     deals_df = pd.DataFrame([{"Masked Deal value": 100000.0, "Deal Status": "Won"}])
     wo_df = pd.DataFrame([{"Amount in Rupees (Excl of GST) (Masked)": 50000.0}])
 
@@ -68,10 +66,10 @@ def test_answer_question_mocked(mock_openai_cls):
     print("test_answer_question_mocked PASSED")
 
 
-@patch("services.bi_agent.OpenAI")
-def test_generate_leadership_report_mocked(mock_openai_cls):
+@patch("services.bi_agent.genai.Client")
+def test_generate_leadership_report_mocked(mock_genai_client_cls):
     mock_client = MagicMock()
-    mock_openai_cls.return_value = mock_client
+    mock_genai_client_cls.return_value = mock_client
 
     mock_report_content = (
         "# Executive Summary\nSummary text.\n\n"
@@ -83,13 +81,11 @@ def test_generate_leadership_report_mocked(mock_openai_cls):
         "# Recommended Actions\nActions text.\n\n"
         "# Data Quality Notes\nQuality text."
     )
-    mock_completion = MagicMock()
-    mock_completion.choices = [
-        MagicMock(message=MagicMock(content=mock_report_content))
-    ]
-    mock_client.chat.completions.create.return_value = mock_completion
+    mock_response = MagicMock()
+    mock_response.text = mock_report_content
+    mock_client.models.generate_content.return_value = mock_response
 
-    agent = BIAgent(api_key="sk-fake-test-key")
+    agent = BIAgent(api_key="fake-gemini-key")
     deals_df = pd.DataFrame()
     wo_df = pd.DataFrame()
 

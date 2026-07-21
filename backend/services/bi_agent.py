@@ -1,7 +1,8 @@
 """
 BI Agent Service for Monday.com BI Agent.
-Interacts with OpenAI API to answer executive business questions and generate
-leadership reports based strictly on pre-computed business metrics from analytics_engine.py.
+Interacts with Google Gemini API using google-genai SDK to answer executive
+business questions and generate leadership reports based strictly on
+pre-computed business metrics from analytics_engine.py.
 
 This module NEVER calculates business KPIs directly.
 """
@@ -13,15 +14,8 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
+from google import genai
 import pandas as pd
-
-from openai import (
-    APIConnectionError,
-    AuthenticationError,
-    OpenAI,
-    OpenAIError,
-    RateLimitError,
-)
 
 # Load environment variables
 load_dotenv()
@@ -39,31 +33,31 @@ except ImportError:
 class BIAgent:
     """
     AI Business Intelligence Agent advising executives and founders.
-    Uses OpenAI GPT models to interpret analytics_engine KPIs.
+    Uses Google Gemini models to interpret analytics_engine KPIs.
     """
 
-    DEFAULT_MODEL = "gpt-4o-mini"
+    DEFAULT_MODEL = "gemini-2.5-flash"
 
     def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
         """
-        Initialize the BI Agent.
+        Initialize the BI Agent with Google GenAI SDK.
 
         Args:
-            api_key: Optional OpenAI API key. If not provided, it is loaded
-                     from the OPENAI_API_KEY environment variable.
-            model: OpenAI model identifier to use (defaults to 'gpt-4o-mini').
+            api_key: Optional Gemini API key. If not provided, it is loaded
+                     from the GEMINI_API_KEY environment variable.
+            model: Gemini model identifier to use (defaults to 'gemini-2.5-flash').
 
         Raises:
-            ValueError: If OPENAI_API_KEY is not set or provided.
+            ValueError: If GEMINI_API_KEY is not set or provided.
         """
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "OPENAI_API_KEY environment variable is not set and no API key was provided."
+                "GEMINI_API_KEY environment variable is not set and no API key was provided."
             )
 
         self.model = model
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = genai.Client(api_key=self.api_key)
         logger.info("BIAgent initialized successfully with model '%s'.", self.model)
 
     def _build_context(
@@ -142,40 +136,25 @@ class BIAgent:
             "6. If the user's question is ambiguous, provide a high-level answer first and then ask ONE concise clarifying question."
         )
 
-        user_prompt = (
+        full_prompt = (
+            f"{system_prompt}\n\n"
             f"EXECUTIVE QUESTION:\n{question}\n\n"
             f"ANALYTICS METRICS CONTEXT:\n{context_str}\n\n"
             "Please provide your professional analysis:"
         )
 
-        # 3. Request completion from OpenAI with error handling
+        # 3. Request content generation from Google Gemini API with error handling
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.models.generate_content(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.3,
+                contents=full_prompt,
             )
-            answer_text = response.choices[0].message.content or ""
-            logger.info("Successfully generated AI response for user question.")
+            answer_text = response.text or ""
+            logger.info("Successfully generated Gemini AI response for user question.")
 
-        except AuthenticationError as e:
-            logger.error("OpenAI Authentication error: %s", e)
-            answer_text = f"Authentication Error: Please check your OPENAI_API_KEY environment variable ({e})."
-        except RateLimitError as e:
-            logger.error("OpenAI Rate limit error: %s", e)
-            answer_text = f"Rate Limit Exceeded: OpenAI API limit reached. Please try again later ({e})."
-        except APIConnectionError as e:
-            logger.error("OpenAI Network connection error: %s", e)
-            answer_text = f"Network Error: Unable to connect to OpenAI API servers ({e})."
-        except OpenAIError as e:
-            logger.error("OpenAI API error: %s", e)
-            answer_text = f"AI Service Error: OpenAI API returned an error ({e})."
         except Exception as e:
-            logger.exception("Unexpected error in BIAgent.answer_question: %s", e)
-            answer_text = f"Error: An unexpected error occurred while generating analysis ({e})."
+            logger.exception("Error calling Gemini API in BIAgent.answer_question: %s", e)
+            answer_text = f"AI Service Error: Gemini API returned an error ({e})."
 
         return {
             "answer": answer_text,
@@ -225,38 +204,23 @@ class BIAgent:
             "- Do not fabricate numbers or speculate beyond the data."
         )
 
-        user_prompt = (
+        full_prompt = (
+            f"{system_prompt}\n\n"
             f"Generate a comprehensive executive leadership report based on this metrics context:\n\n"
             f"{context_str}"
         )
 
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.models.generate_content(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.3,
+                contents=full_prompt,
             )
-            report_text = response.choices[0].message.content or ""
-            logger.info("Successfully generated executive leadership report.")
+            report_text = response.text or ""
+            logger.info("Successfully generated executive leadership report with Gemini API.")
 
-        except AuthenticationError as e:
-            logger.error("OpenAI Authentication error: %s", e)
-            report_text = f"# Executive Report Generation Error\n\nAuthentication failed: Please check your `OPENAI_API_KEY` ({e})."
-        except RateLimitError as e:
-            logger.error("OpenAI Rate limit error: %s", e)
-            report_text = f"# Executive Report Generation Error\n\nRate limit exceeded: Please wait before retrying ({e})."
-        except APIConnectionError as e:
-            logger.error("OpenAI Network error: %s", e)
-            report_text = f"# Executive Report Generation Error\n\nConnection error: Could not reach OpenAI servers ({e})."
-        except OpenAIError as e:
-            logger.error("OpenAI API error: %s", e)
-            report_text = f"# Executive Report Generation Error\n\nOpenAI API Error ({e})."
         except Exception as e:
-            logger.exception("Unexpected error in generate_leadership_report: %s", e)
-            report_text = f"# Executive Report Generation Error\n\nAn unexpected error occurred ({e})."
+            logger.exception("Error generating leadership report with Gemini API: %s", e)
+            report_text = f"# Executive Report Generation Error\n\nGemini API Error ({e})."
 
         iso_now = datetime.now(timezone.utc).isoformat()
         return {

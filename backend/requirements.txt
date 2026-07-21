@@ -4,5 +4,5 @@ requests
 pandas
 python-dotenv
 pydantic
-openai
+google-genai
 openpyxl

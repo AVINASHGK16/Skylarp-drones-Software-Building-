@@ -51,7 +51,7 @@ def initialize_app_data(app: FastAPI) -> None:
     api_key = os.getenv("MONDAY_API_KEY")
     deals_board_id = os.getenv("DEALS_BOARD_ID")
     wo_board_id = os.getenv("WORK_ORDERS_BOARD_ID")
-    openai_key = os.getenv("OPENAI_API_KEY")
+    gemini_key = os.getenv("GEMINI_API_KEY")
 
     raw_deals: list[dict] = []
     raw_work_orders: list[dict] = []
@@ -105,12 +105,12 @@ def initialize_app_data(app: FastAPI) -> None:
     quality_report = generate_data_quality_report(deals_df, wo_df)
     dashboard_metrics = generate_dashboard_metrics(deals_df, wo_df)
 
-    # Initialize BI Agent singleton if key present
+    # Initialize BI Agent singleton if Gemini key present
     bi_agent = None
-    if openai_key and openai_key != "your_openai_api_key_here":
+    if gemini_key and gemini_key != "your_gemini_api_key_here":
         try:
-            bi_agent = BIAgent(api_key=openai_key)
-            logger.info("BIAgent singleton successfully initialized.")
+            bi_agent = BIAgent(api_key=gemini_key)
+            logger.info("BIAgent singleton successfully initialized with Gemini API.")
         except Exception as e:
             logger.error("Failed to initialize BIAgent at startup: %s", e)
 
