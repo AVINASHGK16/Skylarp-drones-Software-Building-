@@ -35,6 +35,7 @@ from services.data_cleaner import (
     clean_work_orders_data,
     generate_data_quality_report,
 )
+from services.analytics_engine import generate_dashboard_metrics
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -156,16 +157,20 @@ def run_verification():
     print("=" * 70)
 
     for key, value in report.items():
-
         if key == "caveats":
-
             print("\nCaveats:")
-
             for caveat in value:
                 print(f"  - {caveat}")
-
         else:
             print(f"{key}: {value}")
+
+    print("\n")
+    print("=" * 70)
+    print("BUSINESS ANALYTICS DASHBOARD METRICS")
+    print("=" * 70)
+    metrics = generate_dashboard_metrics(deals_df, wo_df)
+    import json
+    print(json.dumps(metrics, indent=2))
 
     print("\n[OK] Pipeline verification completed successfully.")
 
