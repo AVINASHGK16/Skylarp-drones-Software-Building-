@@ -172,6 +172,17 @@ def run_verification():
     import json
     print(json.dumps(metrics, indent=2))
 
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key and openai_key != "your_openai_api_key_here":
+        print("\n")
+        print("=" * 70)
+        print("BI AGENT EXECUTIVE RESPONSE (LIVE OPENAI)")
+        print("=" * 70)
+        from services.bi_agent import BIAgent
+        agent = BIAgent(api_key=openai_key)
+        res = agent.answer_question("What are our top revenue sectors and operational risks?", deals_df, wo_df, report)
+        print("\nAI Answer:\n", res.get("answer"))
+
     print("\n[OK] Pipeline verification completed successfully.")
 
 
