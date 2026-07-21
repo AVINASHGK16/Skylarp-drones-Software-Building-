@@ -18,13 +18,13 @@ def test_bi_agent_init():
         print("test_bi_agent_init missing key test PASSED:", e)
 
     # Test explicit API key initialization with Gemini
-    agent = BIAgent(api_key="fake-gemini-key")
-    assert agent.model == "gemini-1.5-flash"
+    agent = BIAgent(api_key="fake-gemini-key", model="gemini-2.0-flash")
+    assert agent.model == "gemini-2.0-flash"
     print("test_bi_agent_init initialization PASSED")
 
 
 def test_build_context():
-    agent = BIAgent(api_key="fake-gemini-key")
+    agent = BIAgent(api_key="fake-gemini-key", model="gemini-2.0-flash")
     mock_metrics = {
         "pipeline_summary": {"total_pipeline_value": 1000.0, "total_deals": 5},
         "revenue_by_sector": {"Mining": 1000.0},
@@ -54,7 +54,7 @@ def test_answer_question_mocked(mock_genai_client_cls):
     mock_response.text = "Analysis: Total pipeline value is strong at 100k."
     mock_client.models.generate_content.return_value = mock_response
 
-    agent = BIAgent(api_key="fake-gemini-key")
+    agent = BIAgent(api_key="fake-gemini-key", model="gemini-2.0-flash")
     deals_df = pd.DataFrame([{"Masked Deal value": 100000.0, "Deal Status": "Won"}])
     wo_df = pd.DataFrame([{"Amount in Rupees (Excl of GST) (Masked)": 50000.0}])
 
@@ -85,7 +85,7 @@ def test_generate_leadership_report_mocked(mock_genai_client_cls):
     mock_response.text = mock_report_content
     mock_client.models.generate_content.return_value = mock_response
 
-    agent = BIAgent(api_key="fake-gemini-key")
+    agent = BIAgent(api_key="fake-gemini-key", model="gemini-2.0-flash")
     deals_df = pd.DataFrame()
     wo_df = pd.DataFrame()
 
@@ -107,7 +107,7 @@ def test_empty_or_blocked_response_fallback(mock_genai_client_cls):
     type(mock_response).text = property(lambda self: (_ for _ in ()).throw(ValueError("Blocked by safety filters")))
     mock_client.models.generate_content.return_value = mock_response
 
-    agent = BIAgent(api_key="fake-gemini-key")
+    agent = BIAgent(api_key="fake-gemini-key", model="gemini-2.0-flash")
     deals_df = pd.DataFrame()
     wo_df = pd.DataFrame()
 

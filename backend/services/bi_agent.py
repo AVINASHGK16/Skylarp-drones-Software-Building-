@@ -36,16 +36,17 @@ class BIAgent:
     Uses Google Gemini models to interpret analytics_engine KPIs.
     """
 
-    DEFAULT_MODEL = "gemini-1.5-flash"
+    DEFAULT_MODEL = "gemini-2.0-flash"
 
-    def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         """
         Initialize the BI Agent with Google GenAI SDK.
 
         Args:
             api_key: Optional Gemini API key. If not provided, it is loaded
                      from the GEMINI_API_KEY environment variable.
-            model: Gemini model identifier to use (defaults to 'gemini-1.5-flash').
+            model: Optional Gemini model identifier. If not provided, it is dynamically
+                   resolved from available API models or environment configuration.
 
         Raises:
             ValueError: If GEMINI_API_KEY is not set or provided.
@@ -56,9 +57,117 @@ class BIAgent:
                 "GEMINI_API_KEY environment variable is not set and no API key was provided."
             )
 
-        self.model = model
         self.client = genai.Client(api_key=self.api_key)
-        logger.info("BIAgent initialized successfully with model '%s'.", self.model)
+        self.model = self._resolve_model(model)
+        logger.info("BIAgent initialized successfully with resolved model '%s'.", self.model)
+
+    def _resolve_model(self, requested_model: str | None = None) -> str:
+        """
+        Dynamically discover and select a valid, supported Gemini model
+        for generateContent from the client API list if requested_model is not explicitly set.
+        """
+        if requested_model and requested_model.strip():
+            return requested_model.strip()
+
+        env_model = os.getenv("GEMINI_MODEL")
+        if env_model and env_model.strip():
+            return env_model.strip()
+
+        # Try dynamically listing available models from Google GenAI API for this API key
+        try:
+            available_models = []
+            models_pager = self.client.models.list()
+            for m in models_pager:
+                m_name = getattr(m, "name", "") or ""
+                actions = (
+                    getattr(m, "supported_actions", [])
+                    or getattr(m, "supported_generation_methods", [])
+                    or []
+                )
+
+                clean_name = m_name.split("/")[-1] if "/" in m_name else m_name
+                supports_generate = False
+                if not actions:
+                    supports_generate = "gemini" in clean_name.lower()
+                else:
+                    supports_generate = any(
+                        "generatecontent" in str(act).lower() for act in actions
+                    )
+
+                if supports_generate and "gemini" in clean_name.lower():
+                    available_models.append(clean_name)
+
+            if available_models:
+                logger.info("Discovered available Gemini models for API key: %s", available_models)
+                for preferred in [
+                    "gemini-2.0-flash",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-2.0-flash-exp",
+                    "gemini-pro",
+                ]:
+                    for model_candidate in available_models:
+                        if preferred in model_candidate.lower():
+                            logger.info("Dynamically selected preferred Gemini model: '%s'", model_candidate)
+                            return model_candidate
+
+                selected = available_models[0]
+                logger.info("Dynamically selected first available Gemini model: '%s'", selected)
+                return selected
+
+        except Exception as e:
+            logger.warning(
+                "Failed to list models dynamically from Gemini API (%s). Defaulting to candidate fallback.", e
+            )
+
+        return self.DEFAULT_MODEL
+
+    def _generate_content_with_fallback(self, prompt: str) -> Any:
+        """
+        Attempt to generate content using the resolved model.
+        If a 404 NOT_FOUND error occurs for a specific model alias, try fallback candidates dynamically.
+        """
+        candidate_models = [self.model]
+        for fallback in [
+            "gemini-2.0-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro",
+        ]:
+            if fallback not in candidate_models and fallback.lower() != self.model.lower():
+                candidate_models.append(fallback)
+
+        last_error = None
+        for model_to_try in candidate_models:
+            try:
+                logger.info("Calling generate_content with Gemini model: '%s'", model_to_try)
+                response = self.client.models.generate_content(
+                    model=model_to_try,
+                    contents=prompt,
+                )
+                if model_to_try != self.model:
+                    logger.info(
+                        "Updated active BIAgent model from '%s' to working model '%s'",
+                        self.model,
+                        model_to_try,
+                    )
+                    self.model = model_to_try
+                return response
+            except Exception as e:
+                err_str = str(e)
+                last_error = e
+                if "404" in err_str or "NOT_FOUND" in err_str or "not found" in err_str.lower():
+                    logger.warning(
+                        "Gemini model '%s' returned 404/NOT_FOUND. Retrying with next candidate...",
+                        model_to_try,
+                    )
+                    continue
+                else:
+                    raise e
+
+        if last_error:
+            raise last_error
 
     def _build_context(
         self,
@@ -187,13 +296,10 @@ class BIAgent:
             "Please provide your professional analysis:"
         )
 
-        # 3. Request content generation from Google Gemini API with robust error handling
+        # 3. Request content generation from Google Gemini API with robust model fallback
         answer_text = None
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=full_prompt,
-            )
+            response = self._generate_content_with_fallback(full_prompt)
             answer_text = self._extract_response_text(response)
             if answer_text:
                 logger.info("Successfully generated Gemini AI response for user question.")
@@ -267,10 +373,7 @@ class BIAgent:
 
         report_text = None
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=full_prompt,
-            )
+            response = self._generate_content_with_fallback(full_prompt)
             report_text = self._extract_response_text(response)
             if report_text:
                 logger.info("Successfully generated executive leadership report with Gemini API.")
