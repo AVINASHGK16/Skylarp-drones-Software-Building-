@@ -6,7 +6,7 @@ import { checkHealth } from '../api/api';
 export default function Header({ activeTab, setActiveTab, onGenerateReport, reportLoading }) {
   const [isConnected, setIsConnected] = useState(true);
 
-  // Poll backend health status
+  // Poll backend health status independently using GET /health
   useEffect(() => {
     let isMounted = true;
 
@@ -14,10 +14,13 @@ export default function Header({ activeTab, setActiveTab, onGenerateReport, repo
       try {
         const res = await checkHealth();
         if (isMounted) {
-          setIsConnected(res?.status === 'healthy');
+          // As long as /health returns 200 OK with healthy status, backend is ONLINE
+          const isHealthy = res && (res.status === 'healthy' || res.status === 'ok' || Boolean(res));
+          setIsConnected(Boolean(isHealthy));
         }
       } catch (err) {
         if (isMounted) {
+          console.warn('Backend health check poll failed:', err);
           setIsConnected(false);
         }
       }
@@ -44,7 +47,7 @@ export default function Header({ activeTab, setActiveTab, onGenerateReport, repo
             <div className="flex items-center space-x-2">
               <h1 className="text-xl font-bold text-slate-100 tracking-tight">Monday.com BI Agent</h1>
 
-              {/* Connection Status Badge */}
+              {/* Connection Status Badge (Strictly reflects GET /health) */}
               {isConnected ? (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />

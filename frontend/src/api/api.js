@@ -3,10 +3,13 @@
  * Centralizes all HTTP communication with the FastAPI backend service.
  */
 
-const BASE_URL =
+const RAW_BASE_URL =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
   'http://localhost:8000';
+
+// Strip any trailing slashes to avoid double-slash URL construction issues
+const BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
 
 /**
  * Helper function to perform fetch requests with error handling.
@@ -45,6 +48,7 @@ async function request(endpoint, options = {}) {
 
 /**
  * Check backend connection health status.
+ * Executes GET /health and evaluates if the FastAPI server is reachable.
  * @returns {Promise<{status: string}>}
  */
 export async function checkHealth() {
