@@ -61,7 +61,7 @@ export default function ChatMessage({ message }) {
               {!isUser && !isReport && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                   <Sparkles className="w-2.5 h-2.5 mr-1" />
-                  GPT-4o mini
+                  Gemini AI
                 </span>
               )}
             </div>

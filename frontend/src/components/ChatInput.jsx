@@ -89,7 +89,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
         </form>
 
         <p className="text-[11px] text-center text-slate-500">
-          Powered by Monday.com GraphQL API & OpenAI GPT-4o mini • Data is securely processed in-memory
+          Powered by Monday.com GraphQL API & Google Gemini AI • Data is securely processed in-memory
         </p>
       </div>
     </div>

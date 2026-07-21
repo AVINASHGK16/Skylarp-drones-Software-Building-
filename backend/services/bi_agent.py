@@ -296,7 +296,7 @@ class BIAgent:
             "Please provide your professional analysis:"
         )
 
-        # 3. Request content generation from Google Gemini API with robust model fallback
+        # 3. Request content generation from Google Gemini API with robust model fallback & quota handling
         answer_text = None
         try:
             response = self._generate_content_with_fallback(full_prompt)
@@ -311,11 +311,13 @@ class BIAgent:
                 )
 
         except Exception as e:
-            logger.exception("Error calling Gemini API in BIAgent.answer_question: %s", e)
-            answer_text = (
-                f"AI Service Error: Unable to complete request with Gemini API ({e}). "
-                "Please verify system credentials and network connectivity."
-            )
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
+                logger.warning("Gemini API Quota Exceeded (429 RESOURCE_EXHAUSTED): %s", e)
+                answer_text = "The AI service has reached its usage quota. Please try again later."
+            else:
+                logger.error("Error calling Gemini API in BIAgent.answer_question: %s", e, exc_info=True)
+                answer_text = "AI Service Error: Unable to complete request with Gemini API. Please try again later."
 
         return {
             "answer": answer_text,
@@ -386,11 +388,19 @@ class BIAgent:
                 )
 
         except Exception as e:
-            logger.exception("Error generating leadership report with Gemini API: %s", e)
-            report_text = (
-                "# Executive Report Generation Error\n\n"
-                f"Unable to generate report due to Gemini API Error ({e})."
-            )
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
+                logger.warning("Gemini API Quota Exceeded (429 RESOURCE_EXHAUSTED): %s", e)
+                report_text = (
+                    "# Executive Leadership Report\n\n"
+                    "The AI service has reached its usage quota. Please try again later."
+                )
+            else:
+                logger.error("Error generating leadership report with Gemini API: %s", e, exc_info=True)
+                report_text = (
+                    "# Executive Report Generation Error\n\n"
+                    "AI Service Error: Unable to complete request with Gemini API. Please try again later."
+                )
 
         iso_now = datetime.now(timezone.utc).isoformat()
         return {
