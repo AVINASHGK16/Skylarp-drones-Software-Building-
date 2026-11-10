@@ -6,3 +6,5 @@ python-dotenv
 pydantic
 openai
 openpyxl
+pytest
+httpx

@@ -30,6 +30,7 @@ load_dotenv(ROOT_DIR / ".env")
 # -----------------------------------------------------------------------------
 
 from services.monday_service import MondayClient
+from services.data_loader import load_dataset
 from services.data_cleaner import (
     clean_deals_data,
     clean_work_orders_data,
@@ -60,53 +61,25 @@ def run_verification():
     logging.info(f"Current Dir  : {Path.cwd()}")
 
     # -------------------------------------------------------------------------
-    # MODE 1 : LIVE MONDAY API
+    # MULTI-SOURCE DATA INGESTION (MONDAY API WITH EXCEL FALLBACK)
     # -------------------------------------------------------------------------
 
-    if api_key and deals_board_id and wo_board_id:
+    raw_deals, raw_work_orders, metadata = load_dataset(
+        api_key=api_key,
+        deals_board_id=deals_board_id,
+        wo_board_id=wo_board_id,
+        root_dir=ROOT_DIR,
+    )
 
-        logging.info("--- MODE: LIVE MONDAY.COM API ---")
+    logging.info(
+        f"Data Ingestion Complete: Source='{metadata['data_source']}', Status='{metadata['data_status']}'"
+    )
+    if metadata.get("fallback_reason"):
+        logging.info(f"Fallback/Status Note: {metadata['fallback_reason']}")
 
-        client = MondayClient(api_key=api_key)
-
-        logging.info("Fetching Deals Board...")
-        raw_deals_items = client.fetch_board_items(deals_board_id)
-        raw_deals = client.parse_items_to_dicts(raw_deals_items)
-
-        logging.info("Fetching Work Orders Board...")
-        raw_wo_items = client.fetch_board_items(wo_board_id)
-        raw_work_orders = client.parse_items_to_dicts(raw_wo_items)
-
-    # -------------------------------------------------------------------------
-    # MODE 2 : LOCAL EXCEL FALLBACK
-    # -------------------------------------------------------------------------
-
-    else:
-
-        logging.info(
-            "--- MODE: LOCAL EXCEL FALLBACK (No API Keys detected) ---"
-        )
-
-        deal_file = ROOT_DIR / "Deal funnel Data.xlsx"
-        wo_file = ROOT_DIR / "Work_Order_Tracker Data.xlsx"
-
-        logging.info(f"Looking for:\n{deal_file}")
-        logging.info(f"Looking for:\n{wo_file}")
-
-        if not deal_file.exists():
-            logging.error(f"Deals file not found:\n{deal_file}")
-            return
-
-        if not wo_file.exists():
-            logging.error(f"Work Orders file not found:\n{wo_file}")
-            return
-
-        raw_deals = pd.read_excel(deal_file).to_dict(orient="records")
-
-        raw_work_orders = pd.read_excel(
-            wo_file,
-            header=1
-        ).to_dict(orient="records")
+    if metadata["data_status"] == "unavailable":
+        logging.error("Verification halted: Both live API and Excel backup sources are unavailable.")
+        return
 
     # -------------------------------------------------------------------------
     # DATA CLEANING

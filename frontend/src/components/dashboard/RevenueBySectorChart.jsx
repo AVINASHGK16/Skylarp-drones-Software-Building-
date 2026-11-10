@@ -10,15 +10,16 @@ import {
   Cell,
 } from 'recharts';
 import { Building2 } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatters';
 
 const COLORS = [
   '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EC4899',
   '#06B6D4', '#6366F1', '#14B8A6', '#F97316', '#A855F7',
 ];
 
-function formatVal(value) {
-  if (value >= 1e7) return `₹${(value / 1e7).toFixed(1)}Cr`;
-  if (value >= 1e5) return `₹${(value / 1e5).toFixed(1)}L`;
+function formatAxisVal(value) {
+  if (value >= 1e7) return `₹${(value / 1e7).toFixed(1)} Cr`;
+  if (value >= 1e5) return `₹${(value / 1e5).toFixed(1)} L`;
   return `₹${value}`;
 }
 
@@ -26,7 +27,7 @@ export default function RevenueBySectorChart({ revenueBySector }) {
   if (!revenueBySector || Object.keys(revenueBySector).length === 0) {
     return (
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-lg flex items-center justify-center min-h-[320px] text-slate-500 text-sm">
-        No sector revenue data available.
+        No sector pipeline data available.
       </div>
     );
   }
@@ -44,8 +45,8 @@ export default function RevenueBySectorChart({ revenueBySector }) {
             <Building2 className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-100">Revenue by Sector</h3>
-            <p className="text-xs text-slate-400">Total pipeline deal distribution across industries</p>
+            <h3 className="text-base font-bold text-slate-100">Pipeline Value by Sector</h3>
+            <p className="text-xs text-slate-400">Gross opportunity value distribution across industries</p>
           </div>
         </div>
       </div>
@@ -66,7 +67,7 @@ export default function RevenueBySectorChart({ revenueBySector }) {
             <YAxis
               stroke="#94A3B8"
               fontSize={11}
-              tickFormatter={formatVal}
+              tickFormatter={formatAxisVal}
               tickLine={false}
             />
             <Tooltip
@@ -77,7 +78,7 @@ export default function RevenueBySectorChart({ revenueBySector }) {
                 color: '#F8FAFC',
                 fontSize: '12px',
               }}
-              formatter={(val) => [`₹${val.toLocaleString('en-IN')}`, 'Pipeline Value']}
+              formatter={(val) => [formatCurrency(val), 'Pipeline Value']}
             />
             <Bar dataKey="value" radius={[6, 6, 0, 0]}>
               {data.map((entry, index) => (

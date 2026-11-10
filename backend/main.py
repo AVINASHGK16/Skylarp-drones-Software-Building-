@@ -29,6 +29,7 @@ from services.data_cleaner import (
     clean_work_orders_data,
     generate_data_quality_report,
 )
+from services.data_loader import load_dataset
 from services.monday_service import MondayClient
 
 # Logging setup
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 def initialize_app_data(app: FastAPI) -> None:
     """
-    Load data from Monday.com or local Excel files during application startup,
+    Load data from Monday.com with reliable Excel fallback during application startup,
     clean datasets, pre-compute metrics, and cache in memory.
     """
     # Load environment variables from .env in backend or root
@@ -53,57 +54,42 @@ def initialize_app_data(app: FastAPI) -> None:
     wo_board_id = os.getenv("WORK_ORDERS_BOARD_ID")
     groq_key = os.getenv("GROQ_API_KEY")
 
-    raw_deals: list[dict] = []
-    raw_work_orders: list[dict] = []
-
-    # Check if Monday API credentials exist
-    if (
-        api_key
-        and deals_board_id
-        and wo_board_id
-        and api_key != "your_monday_api_key_here"
-    ):
-        logger.info("--- STARTUP MODE: LIVE MONDAY.COM API ---")
-        try:
-            client = MondayClient(api_key=api_key)
-            logger.info("Fetching Deals board items from Monday.com...")
-            raw_deals_items = client.fetch_board_items(deals_board_id)
-            raw_deals = client.parse_items_to_dicts(raw_deals_items)
-
-            logger.info("Fetching Work Orders board items from Monday.com...")
-            raw_wo_items = client.fetch_board_items(wo_board_id)
-            raw_work_orders = client.parse_items_to_dicts(raw_wo_items)
-        except Exception as e:
-            logger.error("Error fetching data from Monday.com API: %s", e)
-            raw_deals = []
-            raw_work_orders = []
-    else:
-        logger.info("--- STARTUP MODE: LOCAL EXCEL FALLBACK ---")
-        deal_file = ROOT_DIR / "Deal funnel Data.xlsx"
-        wo_file = ROOT_DIR / "Work_Order_Tracker Data.xlsx"
-
-        if deal_file.exists() and wo_file.exists():
-            logger.info("Loading local Excel file: %s", deal_file)
-            raw_deals = pd.read_excel(deal_file).to_dict(orient="records")
-
-            logger.info("Loading local Excel file: %s", wo_file)
-            raw_work_orders = pd.read_excel(wo_file, header=1).to_dict(
-                orient="records"
-            )
-        else:
-            logger.warning(
-                "Neither API keys nor local Excel files were found at startup."
-            )
+    # Ingest data using source selection strategy with automatic Excel fallback
+    raw_deals, raw_work_orders, metadata = load_dataset(
+        api_key=api_key,
+        deals_board_id=deals_board_id,
+        wo_board_id=wo_board_id,
+        root_dir=ROOT_DIR,
+    )
 
     # Clean datasets
     logger.info("Cleaning datasets at startup...")
     deals_df = clean_deals_data(raw_deals)
     wo_df = clean_work_orders_data(raw_work_orders)
 
-    # Generate quality report & dashboard metrics
-    logger.info("Generating quality report & pre-computing dashboard metrics...")
-    quality_report = generate_data_quality_report(deals_df, wo_df)
-    dashboard_metrics = generate_dashboard_metrics(deals_df, wo_df)
+    # Handle dataset status
+    if metadata.get("data_status") == "unavailable":
+        logger.error(
+            "Application initialized in DEGRADED/UNAVAILABLE state: %s",
+            metadata.get("fallback_reason"),
+        )
+        dashboard_metrics = None
+        quality_report = {
+            "status": "unavailable",
+            "total_records": 0,
+            "caveats": [
+                "CRITICAL: No usable dataset is available. Monday.com API and local Excel backup sources are unavailable."
+            ],
+        }
+    else:
+        logger.info("Generating quality report & pre-computing dashboard metrics...")
+        quality_report = generate_data_quality_report(deals_df, wo_df)
+        if metadata.get("data_status") == "fallback":
+            quality_report["caveats"].insert(
+                0,
+                "Data Source Note: Historical Excel backup is being used; Monday.com live data is unavailable.",
+            )
+        dashboard_metrics = generate_dashboard_metrics(deals_df, wo_df)
 
     # Initialize BI Agent singleton if Groq key present
     bi_agent = None
@@ -114,14 +100,25 @@ def initialize_app_data(app: FastAPI) -> None:
         except Exception as e:
             logger.error("Failed to initialize BIAgent at startup: %s", e)
 
-    # Cache objects in application state
+    # Cache objects and metadata in application state
     app.state.deals_df = deals_df
     app.state.wo_df = wo_df
     app.state.quality_report = quality_report
     app.state.dashboard_metrics = dashboard_metrics
     app.state.bi_agent = bi_agent
+    app.state.data_metadata = metadata
+    app.state.data_source = metadata.get("data_source", "unavailable")
+    app.state.data_status = metadata.get("data_status", "unavailable")
+    app.state.loaded_at = metadata.get("loaded_at")
+    app.state.source_modified_at = metadata.get("source_modified_at")
+    app.state.data_as_of = metadata.get("data_as_of")
+    app.state.last_updated_at = metadata.get("last_updated_at")
+    app.state.fallback_reason = metadata.get("fallback_reason")
+
     logger.info(
-        "Application state initialization complete. Processed %d total records.",
+        "Application state initialization complete. Status: '%s', Source: '%s', Records: %d",
+        metadata.get("data_status"),
+        metadata.get("data_source"),
         len(deals_df) + len(wo_df),
     )
 

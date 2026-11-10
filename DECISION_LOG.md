@@ -427,6 +427,21 @@ Resolved
 
 ---
 
+# Decision 15 — INR Currency Contract & Multi-Currency Safety Policy
+
+## Context
+Initial data pipeline implementations stripped dollar signs (`$`) and assumed currency neutrality, which created financial risk: a `$100,000` opportunity could be summed 1:1 with `₹100,000`, understating its value by ~83x. Furthermore, `Deal funnel Data.xlsx` contained unmarked numbers without explicit currency metadata.
+
+## Decision
+Establish an explicit, documented source-currency contract:
+1. **Unmarked Numbers are INR**: All unmarked numeric deal values in `Deal funnel Data.xlsx` are confirmed as INR (Indian Rupees), consistent with `Work_Order_Tracker Data.xlsx` (`in Rupees (Excl of GST)`).
+2. **Explicit INR Accepted**: Domestic currency markers (`₹`, `Rs.`, `INR`) and Indian numbering units (Crore, Cr, Lakh, Lac) are natively parsed and validated.
+3. **Foreign Currencies Rejected**: Explicit foreign currency values (`$`, `USD`, `€`, `EUR`, `£`, `GBP`, `¥`, `JPY`, etc.) are assigned `status = "UNSUPPORTED_CURRENCY"` and strictly excluded from INR totals.
+4. **No Implicit Exchange Rates**: The system does not attempt unconfigured currency conversion or 1:1 parity coercion.
+5. **Business Assumption Status**: This convention is an explicitly confirmed business assumption. Future multi-currency expansion requires a dedicated foreign-exchange conversion microservice.
+
+---
+
 # Lessons Learned
 
 This project reinforced several engineering principles.

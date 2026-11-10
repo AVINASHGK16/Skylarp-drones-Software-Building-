@@ -56,6 +56,22 @@ def get_pipeline_summary(deals_df: pd.DataFrame) -> dict[str, Any]:
     """
     Calculate high-level sales pipeline metrics from cleaned Deals data.
 
+    Calculates:
+        - gross_historical_opportunity_value: Sum of all valid opportunities (excludes header artifacts).
+        - active_pipeline_value: Sum of OPEN opportunities (excludes terminal, on_hold, and inbound).
+        - open_deal_count: Count of OPEN opportunities.
+        - open_valued_deal_count: Count of OPEN opportunities with known valid financial values.
+        - on_hold_deal_count: Count of ON_HOLD opportunities.
+        - unassigned_inbound_count: Count of UNASSIGNED_INBOUND opportunities.
+        - won_deal_count: Count of WON deals.
+        - lost_deal_count: Count of LOST deals.
+        - dead_or_abandoned_deal_count: Count of DEAD_OR_ABANDONED deals.
+        - cancelled_deal_count: Count of CANCELLED deals.
+        - unknown_deal_count: Count of UNKNOWN_OR_UNCLASSIFIED deals (e.g. repeated headers).
+        - overall_concluded_win_rate: Won / (Won + Lost + Dead + Cancelled).
+        - formal_decision_win_rate: Won / (Won + Lost).
+        - value_coverage_metrics: Detailed tracking of valid, missing, and invalid deal values.
+
     Args:
         deals_df: Cleaned Deals DataFrame.
 
@@ -65,6 +81,28 @@ def get_pipeline_summary(deals_df: pd.DataFrame) -> dict[str, Any]:
     logger.info("Calculating pipeline summary metrics.")
 
     default_summary = {
+        # New Explicit Operational Metrics
+        "gross_historical_opportunity_value": 0.0,
+        "active_pipeline_value": 0.0,
+        "open_deal_count": 0,
+        "open_valued_deal_count": 0,
+        "on_hold_deal_count": 0,
+        "unassigned_inbound_count": 0,
+        "won_deal_count": 0,
+        "lost_deal_count": 0,
+        "dead_or_abandoned_deal_count": 0,
+        "cancelled_deal_count": 0,
+        "unknown_deal_count": 0,
+        "overall_concluded_win_rate": None,
+        "formal_decision_win_rate": None,
+        "value_coverage": {
+            "total_records": 0,
+            "valid_numeric_count": 0,
+            "missing_value_count": 0,
+            "invalid_value_count": 0,
+            "sum_valid_values": 0.0,
+        },
+        # Deprecated compatibility fields for frontend contracts
         "total_pipeline_value": 0.0,
         "average_deal_value": 0.0,
         "active_deals": 0,
@@ -79,45 +117,139 @@ def get_pipeline_summary(deals_df: pd.DataFrame) -> dict[str, Any]:
         return default_summary
 
     df = deals_df.copy()
-    total_deals = len(df)
+    total_records = len(df)
 
-    values = _safe_numeric_series(df, "Masked Deal value")
-    total_pipeline_value = float(values.sum())
-    average_deal_value = (
-        float(values.mean()) if total_deals > 0 else 0.0
+    # 1. Classification series
+    if "Classification" in df.columns:
+        cat_series = df["Classification"].astype(str)
+    else:
+        # Fallback to classify_deal if column not yet added
+        from services.data_cleaner import classify_deal
+        cat_series = pd.Series(
+            [classify_deal(r.get("Deal Status"), r.get("Deal Stage"))[0] for _, r in df.iterrows()],
+            index=df.index,
+        )
+
+    # Exclude repeated table header artifacts from valid business opportunity volume
+    is_header_artifact = cat_series == "UNKNOWN_OR_UNCLASSIFIED"
+    valid_deals_df = df[~is_header_artifact]
+
+    # Numeric series and explicit value status tracking
+    if "Masked Deal value_status" in df.columns:
+        status_series = df["Masked Deal value_status"].astype(str)
+        numeric_vals = pd.to_numeric(df["Masked Deal value"], errors="coerce")
+    else:
+        from services.data_cleaner import parse_numeric_value
+        raw_col = _safe_get_column(df, "Masked Deal value")
+        parsed_results = [parse_numeric_value(raw_col.iloc[i]) for i in range(len(df))]
+        status_series = pd.Series([p.status for p in parsed_results], index=df.index)
+        numeric_vals = pd.Series([p.value for p in parsed_results], index=df.index, dtype=float)
+
+    # 2. Category masks
+    is_open = cat_series == "OPEN"
+    is_on_hold = cat_series == "ON_HOLD"
+    is_inbound = cat_series == "UNASSIGNED_INBOUND"
+    is_won = cat_series == "WON"
+    is_lost = cat_series == "LOST"
+    is_dead = cat_series == "DEAD_OR_ABANDONED"
+    is_cancelled = cat_series == "CANCELLED"
+    is_unknown = cat_series == "UNKNOWN_OR_UNCLASSIFIED"
+
+    # Category Counts
+    open_count = int(is_open.sum())
+    on_hold_count = int(is_on_hold.sum())
+    inbound_count = int(is_inbound.sum())
+    won_count = int(is_won.sum())
+    lost_count = int(is_lost.sum())
+    dead_count = int(is_dead.sum())
+    cancelled_count = int(is_cancelled.sum())
+    unknown_count = int(is_unknown.sum())
+
+    # 3. Value Coverage Metrics Tracking
+    # Tracks VALID, MISSING, and INVALID (including UNSUPPORTED_CURRENCY)
+    is_valid_value = (status_series == "VALID") & (~is_header_artifact)
+    is_missing_value = (status_series == "MISSING") & (~is_header_artifact)
+    is_invalid_value = status_series.isin(["INVALID", "UNSUPPORTED_CURRENCY"]) & (~is_header_artifact)
+
+    valid_numeric_count = int(is_valid_value.sum())
+    missing_value_count = int(is_missing_value.sum())
+    invalid_value_count = int(is_invalid_value.sum())
+    total_valid_deals = int(len(valid_deals_df))
+
+    # Required Invariant: valid_numeric_count + missing_value_count + invalid_value_count == total_records
+    assert valid_numeric_count + missing_value_count + invalid_value_count == total_valid_deals, (
+        f"Coverage invariant violated: {valid_numeric_count} + {missing_value_count} + "
+        f"{invalid_value_count} != {total_valid_deals}"
     )
 
-    # Status & Stage evaluation
-    status_series = _safe_get_column(df, "Deal Status", default_value="").astype(str).str.lower()
-    stage_series = _safe_get_column(df, "Deal Stage", default_value="").astype(str).str.lower()
+    # Operational Pipeline Values: Only VALID numeric values contribute to sums
+    gross_opportunity_val = float(numeric_vals[is_valid_value].sum())
+    active_pipeline_val = float(numeric_vals[is_open & is_valid_value].sum())
 
-    # Identify won / lost / active deals
-    is_won = status_series.str.contains("won", na=False) | stage_series.str.contains("won", na=False)
-    is_lost = status_series.str.contains("lost", na=False) | stage_series.str.contains("lost", na=False)
-
-    deals_won = int(is_won.sum())
-    deals_lost = int(is_lost.sum())
-    active_deals = int(total_deals - (deals_won + deals_lost))
-
-    # Calculate conversion rate (% of won deals out of total closed or total deals)
-    closed_deals = deals_won + deals_lost
-    conversion_rate = (
-        round((deals_won / closed_deals) * 100, 2)
-        if closed_deals > 0
-        else (round((deals_won / total_deals) * 100, 2) if total_deals > 0 else 0.0)
-    )
-
-    result = {
-        "total_pipeline_value": round(total_pipeline_value, 2),
-        "average_deal_value": round(average_deal_value, 2),
-        "active_deals": max(0, active_deals),
-        "total_deals": total_deals,
-        "deals_won": deals_won,
-        "deals_lost": deals_lost,
-        "pipeline_conversion_rate": conversion_rate,
+    value_coverage = {
+        "total_records": total_valid_deals,
+        "valid_numeric_count": valid_numeric_count,
+        "missing_value_count": missing_value_count,
+        "invalid_value_count": invalid_value_count,
+        "sum_valid_values": round(gross_opportunity_val, 2),
     }
 
-    logger.info("Pipeline summary calculated: %d total deals, $%.2f value.", total_deals, total_pipeline_value)
+    # 4. Win-Rate Metrics
+    concluded_deals = won_count + lost_count + dead_count + cancelled_count
+    overall_concluded_win_rate = (
+        round((won_count / concluded_deals) * 100, 2)
+        if concluded_deals > 0
+        else None
+    )
+
+    formal_decision_deals = won_count + lost_count
+    formal_decision_win_rate = (
+        round((won_count / formal_decision_deals) * 100, 2)
+        if formal_decision_deals > 0
+        else None
+    )
+
+    # 5. Average Deal Value: Computed across OPEN opportunities with known VALID numeric values
+    # Excludes missing and invalid values from the denominator.
+    # Legitimate 0.0 values remain in the denominator.
+    open_valid_vals = numeric_vals[is_open & is_valid_value]
+    average_deal_value = float(open_valid_vals.mean()) if len(open_valid_vals) > 0 else 0.0
+
+    # pipeline_conversion_rate: points to formal_decision_win_rate or overall_concluded_win_rate
+    compat_conversion_rate = formal_decision_win_rate if formal_decision_win_rate is not None else 0.0
+
+    result = {
+        # Explicit Operational Metrics
+        "gross_historical_opportunity_value": round(gross_opportunity_val, 2),
+        "active_pipeline_value": round(active_pipeline_val, 2),
+        "open_deal_count": open_count,
+        "open_valued_deal_count": int(len(open_valid_vals)),
+        "on_hold_deal_count": on_hold_count,
+        "unassigned_inbound_count": inbound_count,
+        "won_deal_count": won_count,
+        "lost_deal_count": lost_count,
+        "dead_or_abandoned_deal_count": dead_count,
+        "cancelled_deal_count": cancelled_count,
+        "unknown_deal_count": unknown_count,
+        "overall_concluded_win_rate": overall_concluded_win_rate,
+        "formal_decision_win_rate": formal_decision_win_rate,
+        "value_coverage": value_coverage,
+        # Deprecated compatibility fields maintained for frontend contracts
+        "total_pipeline_value": round(gross_opportunity_val, 2),
+        "average_deal_value": round(average_deal_value, 2),
+        "active_deals": open_count,
+        "total_deals": total_valid_deals,
+        "deals_won": won_count,
+        "deals_lost": lost_count,
+        "pipeline_conversion_rate": compat_conversion_rate,
+    }
+
+    logger.info(
+        "Pipeline summary calculated: %d total valid deals, INR %.2f gross opportunity, INR %.2f active pipeline.",
+        len(valid_deals_df),
+        gross_opportunity_val,
+        active_pipeline_val,
+    )
     return result
 
 
@@ -137,7 +269,15 @@ def get_revenue_by_sector(deals_df: pd.DataFrame) -> dict[str, float]:
         return {}
 
     df = deals_df.copy()
-    df["_val"] = _safe_numeric_series(df, "Masked Deal value")
+    if "Classification" in df.columns:
+        df = df[df["Classification"] != "UNKNOWN_OR_UNCLASSIFIED"]
+
+    if "Masked Deal value_status" in df.columns:
+        valid_mask = df["Masked Deal value_status"] == "VALID"
+        df["_val"] = df["Masked Deal value"].where(valid_mask, 0.0).fillna(0.0)
+    else:
+        df["_val"] = _safe_numeric_series(df, "Masked Deal value")
+
     df["_sector"] = _safe_get_column(df, "Sector/service", default_value="Unspecified").astype(str)
 
     grouped = (
@@ -167,7 +307,15 @@ def get_revenue_by_stage(deals_df: pd.DataFrame) -> dict[str, float]:
         return {}
 
     df = deals_df.copy()
-    df["_val"] = _safe_numeric_series(df, "Masked Deal value")
+    if "Classification" in df.columns:
+        df = df[df["Classification"] != "UNKNOWN_OR_UNCLASSIFIED"]
+
+    if "Masked Deal value_status" in df.columns:
+        valid_mask = df["Masked Deal value_status"] == "VALID"
+        df["_val"] = df["Masked Deal value"].where(valid_mask, 0.0).fillna(0.0)
+    else:
+        df["_val"] = _safe_numeric_series(df, "Masked Deal value")
+
     df["_stage"] = _safe_get_column(df, "Deal Stage", default_value="Unspecified").astype(str)
 
     grouped = (
@@ -197,7 +345,14 @@ def get_monthly_pipeline(deals_df: pd.DataFrame) -> dict[str, float]:
         return {}
 
     df = deals_df.copy()
-    df["_val"] = _safe_numeric_series(df, "Masked Deal value")
+    if "Classification" in df.columns:
+        df = df[df["Classification"] != "UNKNOWN_OR_UNCLASSIFIED"]
+
+    if "Masked Deal value_status" in df.columns:
+        valid_mask = df["Masked Deal value_status"] == "VALID"
+        df["_val"] = df["Masked Deal value"].where(valid_mask, 0.0).fillna(0.0)
+    else:
+        df["_val"] = _safe_numeric_series(df, "Masked Deal value")
 
     # Use Close Date (A) or fallback to Tentative Close Date or Created Date
     close_dates = _safe_get_column(df, "Close Date (A)")
@@ -335,7 +490,7 @@ def get_billing_summary(wo_df: pd.DataFrame) -> dict[str, float]:
         "billing_percentage": billing_pct,
     }
 
-    logger.info("Billing summary calculated: $%.2f billed out of $%.2f total contract.",
+    logger.info("Billing summary calculated: INR %.2f billed out of INR %.2f total contract.",
                 total_billed, total_contract)
     return result
 

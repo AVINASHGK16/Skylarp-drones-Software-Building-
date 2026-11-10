@@ -21,7 +21,7 @@ export default function WorkOrderCard({ workOrderSummary }) {
           </div>
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-          {completionRate}% Completed
+          {completionRate != null ? `${completionRate}% Completed` : '—'}
         </span>
       </div>
 

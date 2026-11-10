@@ -6,6 +6,7 @@ import { getMetrics } from '../api/api';
  */
 export function useDashboard() {
   const [metrics, setMetrics] = useState(null);
+  const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -16,6 +17,7 @@ export function useDashboard() {
     try {
       const data = await getMetrics();
       setMetrics(data.dashboard_metrics || null);
+      setMetadata(data.data_metadata || null);
       setLastUpdated(
         new Date().toLocaleTimeString([], {
           hour: '2-digit',
@@ -37,6 +39,7 @@ export function useDashboard() {
 
   return {
     metrics,
+    metadata,
     loading,
     error,
     lastUpdated,

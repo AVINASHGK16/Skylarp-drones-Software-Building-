@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDashboard } from '../../hooks/useDashboard';
 import KPICards from './KPICards';
+import DataQualityCard from './DataQualityCard';
 import RevenueBySectorChart from './RevenueBySectorChart';
 import RevenueByStageChart from './RevenueByStageChart';
 import MonthlyPipelineChart from './MonthlyPipelineChart';
@@ -10,7 +11,7 @@ import WorkOrderCard from './WorkOrderCard';
 import { RefreshCw, AlertTriangle, BarChart2, Clock } from 'lucide-react';
 
 export default function Dashboard() {
-  const { metrics, loading, error, lastUpdated, refreshMetrics } = useDashboard();
+  const { metrics, metadata, loading, error, lastUpdated, refreshMetrics } = useDashboard();
 
   if (loading && !metrics) {
     return (
@@ -19,9 +20,12 @@ export default function Dashboard() {
           <div className="h-8 bg-slate-800 rounded-lg w-64" />
           <div className="h-9 bg-slate-800 rounded-lg w-36" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-32 bg-slate-900 border border-slate-800 rounded-2xl p-5" />
+        {/* Data Quality Skeleton */}
+        <div className="h-24 bg-slate-900 border border-slate-800 rounded-2xl p-4" />
+        {/* 6 KPI Cards Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-28 bg-slate-900 border border-slate-800 rounded-2xl p-4" />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -52,7 +56,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-5">
       {/* Dashboard Header Title & Refresh Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
@@ -84,7 +88,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Top 4 KPI Summary Cards */}
+      {/* Compact Data Quality & Ingestion Status Section */}
+      <DataQualityCard
+        metadata={metadata}
+        pipelineSummary={metrics?.pipeline_summary}
+      />
+
+      {/* Top 6 KPI Summary Cards */}
       <KPICards
         pipelineSummary={metrics?.pipeline_summary}
         billingSummary={metrics?.billing_summary}

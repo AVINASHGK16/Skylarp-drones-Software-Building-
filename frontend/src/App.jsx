@@ -8,6 +8,13 @@ import { AlertTriangle, X } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'dashboard'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('tab');
+      if (param === 'dashboard' || param === 'chat') return param;
+    }
+    return 'chat';
+  }); // 'chat' | 'dashboard'
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);

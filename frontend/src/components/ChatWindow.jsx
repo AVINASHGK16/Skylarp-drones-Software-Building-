@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Bot, BarChart3, PieChart, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
+import { Bot, BarChart3, PieChart, ShieldCheck, Loader2 } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 
 export default function ChatWindow({ messages, loading }) {

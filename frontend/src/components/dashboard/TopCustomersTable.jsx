@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Award } from 'lucide-react';
+import { Award } from 'lucide-react';
 
 export default function TopCustomersTable({ topCustomers }) {
   if (!topCustomers || topCustomers.length === 0) {
@@ -49,7 +49,7 @@ export default function TopCustomersTable({ topCustomers }) {
                 </td>
                 <td className="py-2.5 px-3 font-medium text-slate-200">{item.customer}</td>
                 <td className="py-2.5 px-3 text-right font-bold text-emerald-400">
-                  ₹{item.revenue.toLocaleString('en-IN')}
+                  {item.revenue != null ? `₹${item.revenue.toLocaleString('en-IN')}` : '—'}
                 </td>
               </tr>
             ))}

@@ -5,14 +5,16 @@ Orchestrates HTTP requests with pre-cached backend services.
 
 import logging
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from models.schemas import (
     AskRequest,
     AskResponse,
+    DataMetadata,
     HealthResponse,
     LeadershipReportResponse,
     MetricsResponse,
+    ReadyResponse,
     RootResponse,
 )
 
@@ -40,12 +42,88 @@ async def root() -> dict[str, str]:
 @router.get(
     "/health",
     response_model=HealthResponse,
-    summary="Health Check",
-    description="Checks the operational health status of the API service.",
+    summary="Liveness Health Check",
+    description="Reports process liveness to verify the backend server is running.",
 )
 async def health_check() -> HealthResponse:
-    """Health check endpoint."""
+    """Liveness probe: returns 200 OK as long as the process is alive."""
     return HealthResponse(status="healthy")
+
+
+@router.get(
+    "/ready",
+    response_model=ReadyResponse,
+    summary="Readiness Health Check",
+    description="Indicates whether business dataset is loaded and ready for operations.",
+)
+async def readiness_check(
+    response: Response,
+    state: Any = Depends(get_app_state),
+) -> ReadyResponse:
+    """
+    Readiness probe:
+    Returns 200 if data is usable ('live' or 'fallback').
+    Returns 503 if data is 'unavailable'.
+    """
+    data_status = getattr(state, "data_status", "unavailable")
+    data_source = getattr(state, "data_source", "unavailable")
+    loaded_at = getattr(state, "loaded_at", None)
+    fallback_reason = getattr(state, "fallback_reason", None)
+
+    if data_status == "unavailable":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return ReadyResponse(
+            status="not_ready",
+            data_source=data_source,
+            data_status=data_status,
+            loaded_at=loaded_at,
+            fallback_reason=fallback_reason or "DATA_SOURCES_UNAVAILABLE",
+        )
+
+    return ReadyResponse(
+        status="ready",
+        data_source=data_source,
+        data_status=data_status,
+        loaded_at=loaded_at,
+        fallback_reason=fallback_reason,
+    )
+
+
+@router.get(
+    "/health/ready",
+    response_model=ReadyResponse,
+    summary="Readiness Health Check (Alias)",
+    description="Alias for /ready for orchestrators checking /health/ready.",
+)
+async def readiness_check_alias(
+    response: Response,
+    state: Any = Depends(get_app_state),
+) -> ReadyResponse:
+    """Alias for readiness check."""
+    return await readiness_check(response=response, state=state)
+
+
+@router.get(
+    "/data-status",
+    response_model=DataMetadata,
+    summary="Data Source Metadata",
+    description="Returns data source origin (monday_api, excel_fallback, or unavailable), status, timestamp, and fallback reason.",
+)
+async def get_data_status(state: Any = Depends(get_app_state)) -> DataMetadata:
+    """Check dataset source metadata."""
+    meta = getattr(
+        state,
+        "data_metadata",
+        {
+            "data_source": "unavailable",
+            "data_status": "unavailable",
+            "last_updated_at": None,
+            "fallback_reason": "Not initialized",
+        },
+    )
+    if isinstance(meta, dict):
+        return DataMetadata(**meta)
+    return meta
 
 
 @router.get(
@@ -57,6 +135,15 @@ async def health_check() -> HealthResponse:
 async def get_cached_metrics(state: Any = Depends(get_app_state)) -> MetricsResponse:
     """Return in-memory cached business dashboard metrics without recalculating."""
     logger.info("Handling GET /metrics request.")
+    data_status = getattr(state, "data_status", "live")
+    if data_status == "unavailable":
+        reason = getattr(state, "fallback_reason", "No usable dataset available.")
+        logger.error("GET /metrics rejected: Dataset unavailable. %s", reason)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"No usable dataset available. {reason}",
+        )
+
     cached_metrics = getattr(state, "dashboard_metrics", None)
     if cached_metrics is None:
         logger.error("Dashboard metrics not initialized in app state.")
@@ -64,7 +151,10 @@ async def get_cached_metrics(state: Any = Depends(get_app_state)) -> MetricsResp
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Dashboard metrics have not been initialized.",
         )
-    return MetricsResponse(dashboard_metrics=cached_metrics)
+
+    raw_meta = getattr(state, "data_metadata", None)
+    meta = DataMetadata(**raw_meta) if isinstance(raw_meta, dict) else raw_meta
+    return MetricsResponse(dashboard_metrics=cached_metrics, data_metadata=meta)
 
 
 @router.post(
@@ -79,12 +169,21 @@ async def ask_question(
     """Ask strategic executive business question."""
     logger.info("Handling POST /ask request with question: '%s'", payload.question)
 
+    data_status = getattr(state, "data_status", "live")
+    if data_status == "unavailable":
+        reason = getattr(state, "fallback_reason", "No usable dataset available.")
+        logger.error("POST /ask rejected: Dataset unavailable. %s", reason)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"BI Agent analysis unavailable: No usable dataset could be loaded. {reason}",
+        )
+
     bi_agent = getattr(state, "bi_agent", None)
     if bi_agent is None:
         logger.error("BIAgent not initialized (missing API key or startup failure).")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="BI Agent service is unavailable. Please verify OPENAI_API_KEY configuration.",
+            detail="BI Agent service is unavailable. Please verify GROQ_API_KEY configuration.",
         )
 
     deals_df = getattr(state, "deals_df", None)
@@ -123,12 +222,21 @@ async def get_leadership_report(
     """Generate executive leadership report in Markdown."""
     logger.info("Handling GET /leadership-report request.")
 
+    data_status = getattr(state, "data_status", "live")
+    if data_status == "unavailable":
+        reason = getattr(state, "fallback_reason", "No usable dataset available.")
+        logger.error("GET /leadership-report rejected: Dataset unavailable. %s", reason)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Leadership report unavailable: No usable dataset could be loaded. {reason}",
+        )
+
     bi_agent = getattr(state, "bi_agent", None)
     if bi_agent is None:
         logger.error("BIAgent not initialized.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="BI Agent service is unavailable. Please verify OPENAI_API_KEY configuration.",
+            detail="BI Agent service is unavailable. Please verify GROQ_API_KEY configuration.",
         )
 
     deals_df = getattr(state, "deals_df", None)

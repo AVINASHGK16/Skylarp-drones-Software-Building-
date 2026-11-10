@@ -45,6 +45,19 @@ An end-to-end, production-ready **Executive Business Intelligence (BI) Platform 
 
 ---
 
+## 💱 Source Currency Contract & Multi-Currency Safety Policy
+
+The Skylarp Drones Business Intelligence pipeline operates under a confirmed source-currency contract:
+
+1. **Unmarked Numbers are INR**: All unmarked numeric deal values from `Deal funnel Data.xlsx` (and the Monday.com Deals board) are interpreted as **INR (Indian Rupees)**, aligning with the explicit column declarations in `Work_Order_Tracker Data.xlsx` (`in Rupees (Excl of GST)`).
+2. **Explicit INR Accepted**: Domestic currency markers (e.g., `₹`, `Rs.`, `INR`) and Indian numbering conventions (Crore, Cr, Lakh, Lac) are natively parsed and normalized.
+3. **Foreign Currencies Rejected**: Explicit foreign currency values (e.g., `$`, `USD`, `€`, `EUR`, `£`, `GBP`, `¥`, `JPY`, `AUD`, `CAD`) are rejected from INR financial aggregations with `status = "UNSUPPORTED_CURRENCY"`.
+4. **No Implicit FX Conversions**: The system performs **no implicit exchange-rate conversion**. Foreign currency inputs are never converted 1:1 or estimated into INR totals without an authoritative exchange-rate service.
+5. **Confirmed Business Assumption**: This convention is a confirmed business assumption established during engineering audit Phase 3.3.
+6. **Audit Transparency & Diagnostics**: Rejected foreign currency records preserve their original raw string in `Masked Deal value_raw` and are tracked in diagnostics via `data_quality_report["deals_unsupported_currency_values"]`.
+
+---
+
 ## 🏗️ Architecture Overview
 
 ```mermaid

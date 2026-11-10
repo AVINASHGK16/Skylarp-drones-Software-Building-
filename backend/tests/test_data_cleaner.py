@@ -38,7 +38,7 @@ def test_clean_deals():
         {
             "id": "101",
             "name": "Deal Alpha",
-            "masked deal value": "$123,456.78",
+            "masked deal value": "₹123,456.78",
             "CLOSE DATE (a)": "2026-05-15",
             "sector/service": "  drones & software  ",
             "Deal Status": "WON",
@@ -49,14 +49,30 @@ def test_clean_deals():
             "masked deal value": None,
             "CLOSE DATE (a)": "invalid date",
         },
+        {
+            "id": "103",
+            "name": "Deal Gamma",
+            "masked deal value": "$50,000",
+            "CLOSE DATE (a)": "2026-06-01",
+            "Deal Status": "Open",
+        },
     ]
     df_deals = clean_deals_data(raw_deals)
     assert df_deals.loc[0, "Masked Deal value"] == 123456.78
+    assert df_deals.loc[0, "Masked Deal value_status"] == "VALID"
     assert df_deals.loc[0, "Close Date (A)"] == "2026-05-15"
     assert df_deals.loc[0, "Sector/service"] == "Drones & Software"
-    assert df_deals.loc[1, "Masked Deal value"] == 0.0
+
+    # Deal Beta: missing numeric value preserved as NaN and MISSING status (not 0.0)
+    assert pd.isna(df_deals.loc[1, "Masked Deal value"])
+    assert df_deals.loc[1, "Masked Deal value_status"] == "MISSING"
     assert pd.isna(df_deals.loc[1, "Close Date (A)"])
     assert df_deals.loc[1, "Deal Stage"] == "Unspecified"
+
+    # Deal Gamma: foreign currency detected and rejected as UNSUPPORTED_CURRENCY
+    assert pd.isna(df_deals.loc[2, "Masked Deal value"])
+    assert df_deals.loc[2, "Masked Deal value_status"] == "UNSUPPORTED_CURRENCY"
+    assert df_deals.loc[2, "Masked Deal value_raw"] == "$50,000"
     print("test_clean_deals PASSED")
 
 

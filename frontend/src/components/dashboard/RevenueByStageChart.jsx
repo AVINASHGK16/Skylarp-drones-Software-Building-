@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Layers } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatters';
 
 const COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
@@ -18,12 +19,12 @@ export default function RevenueByStageChart({ revenueByStage }) {
   if (!revenueByStage || Object.keys(revenueByStage).length === 0) {
     return (
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-lg flex items-center justify-center min-h-[320px] text-slate-500 text-sm">
-        No stage revenue data available.
+        No stage pipeline data available.
       </div>
     );
   }
 
-  // Filter out 0 value stages and take top stages
+  // Filter out 0 value stages and take active stages
   const data = Object.entries(revenueByStage)
     .filter(([_, val]) => val > 0)
     .map(([stage, val]) => ({
@@ -39,8 +40,8 @@ export default function RevenueByStageChart({ revenueByStage }) {
             <Layers className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-100">Revenue by Deal Stage</h3>
-            <p className="text-xs text-slate-400">Value distribution across sales funnel stages</p>
+            <h3 className="text-base font-bold text-slate-100">Pipeline Value by Deal Stage</h3>
+            <p className="text-xs text-slate-400">Gross opportunity value distribution across sales stages</p>
           </div>
         </div>
       </div>
@@ -69,7 +70,7 @@ export default function RevenueByStageChart({ revenueByStage }) {
                 color: '#F8FAFC',
                 fontSize: '12px',
               }}
-              formatter={(val) => [`₹${val.toLocaleString('en-IN')}`, 'Value']}
+              formatter={(val) => [formatCurrency(val), 'Pipeline Value']}
             />
             <Legend
               layout="vertical"

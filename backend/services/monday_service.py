@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+class MondayAPIError(RuntimeError):
+    """Base exception for Monday.com API failures (HTTP errors, timeouts, GraphQL errors)."""
+    pass
+
+
 class MondayClient:
     """Client for interacting with the Monday.com GraphQL v2 API."""
 
@@ -58,12 +63,12 @@ class MondayClient:
             )
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"HTTP request to Monday.com API failed: {e}") from e
+            raise MondayAPIError(f"HTTP request to Monday.com API failed: {e}") from e
 
         data = response.json()
 
         if "errors" in data:
-            raise RuntimeError(f"Monday.com API GraphQL errors: {data['errors']}")
+            raise MondayAPIError(f"Monday.com API GraphQL errors: {data['errors']}")
 
         return data
 
@@ -132,15 +137,37 @@ class MondayClient:
                 response_data = self._execute_query(
                     initial_query, {"board_id": [str(board_id)]}
                 )
-                boards = response_data.get("data", {}).get("boards", [])
+                if not isinstance(response_data, dict) or "data" not in response_data:
+                    raise MondayAPIError("Malformed Monday.com response: missing 'data' field.")
+
+                boards = response_data.get("data", {}).get("boards")
+                if not isinstance(boards, list):
+                    raise MondayAPIError("Malformed Monday.com response: 'boards' field is not a list.")
+
+                # If Monday.com returns an empty boards list, the board does not exist or token lacks access
                 if not boards:
-                    break
-                items_page = boards[0].get("items_page", {})
+                    raise MondayAPIError(f"Board ID '{board_id}' not found or inaccessible.")
+
+                board_obj = boards[0]
+                if not isinstance(board_obj, dict):
+                    raise MondayAPIError("Malformed Monday.com response: board entry is not an object.")
+
+                items_page = board_obj.get("items_page")
+                if not isinstance(items_page, dict):
+                    raise MondayAPIError("Malformed Monday.com response: missing or invalid 'items_page'.")
             else:
                 response_data = self._execute_query(next_query, {"cursor": cursor})
-                items_page = response_data.get("data", {}).get("next_items_page", {})
+                if not isinstance(response_data, dict) or "data" not in response_data:
+                    raise MondayAPIError("Malformed Monday.com response during pagination: missing 'data' field.")
 
-            page_items = items_page.get("items", [])
+                items_page = response_data.get("data", {}).get("next_items_page")
+                if not isinstance(items_page, dict):
+                    raise MondayAPIError("Malformed Monday.com response during pagination: missing or invalid 'next_items_page'.")
+
+            page_items = items_page.get("items")
+            if not isinstance(page_items, list):
+                raise MondayAPIError("Malformed Monday.com response: 'items' field is not a list.")
+
             all_items.extend(page_items)
 
             cursor = items_page.get("cursor")

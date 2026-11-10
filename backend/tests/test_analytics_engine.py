@@ -58,7 +58,7 @@ def test_populated_analytics():
         {
             "id": "101",
             "name": "Deal A",
-            "Masked Deal value": "$100,000",
+            "Masked Deal value": "₹100,000",
             "Sector/service": "Mining",
             "Deal Status": "Won",
             "Deal Stage": "Closed Won",
