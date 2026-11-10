@@ -14,7 +14,9 @@ Implements:
 import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
+import hashlib
 import logging
+import struct
 from typing import Any
 import uuid
 import pandas as pd
@@ -55,6 +57,19 @@ class ZombieWorkerFencedError(Exception):
     pass
 
 
+def compute_advisory_lock_key_64(tenant_id: uuid.UUID, connection_id: uuid.UUID | None = None) -> int:
+    """
+    Generate a collision-resistant 64-bit signed integer key from (tenant_id, connection_id)
+    for PostgreSQL advisory locking.
+    Uses SHA-256 truncated to 8 bytes and unpacked as a big-endian signed 64-bit integer (-2^63 to 2^63 - 1).
+    Collision resistance: ~5.06 x 10^9 keys for 50% collision probability, compared to only ~77,000 keys for 32-bit hashtext.
+    """
+    conn_id = connection_id or uuid.UUID("00000000-0000-0000-0000-000000000000")
+    key_str = f"{tenant_id}:{conn_id}"
+    digest = hashlib.sha256(key_str.encode("utf-8")).digest()
+    return struct.unpack(">q", digest[:8])[0]
+
+
 class SessionAdvisoryLock:
     """
     Session-level PostgreSQL advisory lock pinned to a single database connection.
@@ -62,6 +77,9 @@ class SessionAdvisoryLock:
     
     Guarantees:
     - Held by the database session (connection), not a transaction.
+    - Uses 64-bit SHA-256 collision-resistant key strategy.
+    - Verifies explicit unlock success before returning connection to pool.
+    - Invalidates connection on unlock or connection health failure to prevent pool poisoning.
     - No long-running database transactions across network calls.
     - Reliable cleanup in finally blocks.
     - Independent connections for the same tenant sync in parallel.
@@ -78,6 +96,7 @@ class SessionAdvisoryLock:
         self.tenant_id = tenant_id
         self.connection_id = connection_id or uuid.UUID("00000000-0000-0000-0000-000000000000")
         self.lock_key = f"{self.tenant_id}:{self.connection_id}"
+        self.lock_key_64 = compute_advisory_lock_key_64(self.tenant_id, self.connection_id)
         self.conn: AsyncConnection | None = None
         self.is_locked = False
 
@@ -88,8 +107,8 @@ class SessionAdvisoryLock:
 
         if bind_dialect == "postgresql":
             res = await self.conn.execute(
-                text("SELECT pg_try_advisory_lock(hashtext(:key))"),
-                {"key": self.lock_key},
+                text("SELECT pg_try_advisory_lock(CAST(:key AS BIGINT))"),
+                {"key": self.lock_key_64},
             )
             self.is_locked = bool(res.scalar_one())
             if not self.is_locked:
@@ -114,30 +133,46 @@ class SessionAdvisoryLock:
             return True
 
     async def release(self) -> None:
-        """Release session-level advisory lock and close pinned connection."""
+        """Release session-level advisory lock and return/invalidate pinned connection."""
         if not self.is_locked:
             if self.conn:
                 await self.conn.close()
                 self.conn = None
             return
 
+        should_invalidate = False
         try:
             if self.engine.dialect.name == "postgresql" and self.conn:
-                await self.conn.execute(
-                    text("SELECT pg_advisory_unlock(hashtext(:key))"),
-                    {"key": self.lock_key},
+                res = await self.conn.execute(
+                    text("SELECT pg_advisory_unlock(CAST(:key AS BIGINT))"),
+                    {"key": self.lock_key_64},
                 )
+                unlocked = bool(res.scalar_one())
+                if not unlocked:
+                    logger.warning(
+                        "Advisory lock %s (64-bit key %s) was not held by session or failed to unlock cleanly",
+                        self.lock_key,
+                        self.lock_key_64,
+                    )
+                    should_invalidate = True
             elif self.engine.dialect.name != "postgresql":
                 async with _sqlite_master_lock:
                     lock = _sqlite_locks.get(self.lock_key)
                     if lock and lock.locked():
                         lock.release()
         except Exception as e:
-            logger.warning("Error releasing advisory lock %s: %s", self.lock_key, e)
+            logger.warning("Error releasing advisory lock %s (64-bit key %s): %s", self.lock_key, self.lock_key_64, e)
+            should_invalidate = True
         finally:
             self.is_locked = False
             if self.conn:
-                await self.conn.close()
+                if should_invalidate:
+                    try:
+                        await self.conn.invalidate()
+                    except Exception as inv_err:
+                        logger.warning("Failed to invalidate connection: %s", inv_err)
+                else:
+                    await self.conn.close()
                 self.conn = None
 
     async def __aenter__(self):
@@ -159,16 +194,17 @@ async def get_advisory_lock(session: AsyncSession, tenant_id: uuid.UUID, connect
     lock_key_str = f"{tenant_id}:{connection_id or '00000000-0000-0000-0000-000000000000'}"
 
     if is_postgres:
+        key_64 = compute_advisory_lock_key_64(tenant_id, connection_id)
         res = await session.execute(
-            text("SELECT pg_try_advisory_lock(hashtext(:key))"),
-            {"key": lock_key_str},
+            text("SELECT pg_try_advisory_lock(CAST(:key AS BIGINT))"),
+            {"key": key_64},
         )
         acquired = bool(res.scalar_one())
         if acquired:
             # Unlock to leave clean test state
             await session.execute(
-                text("SELECT pg_advisory_unlock(hashtext(:key))"),
-                {"key": lock_key_str},
+                text("SELECT pg_advisory_unlock(CAST(:key AS BIGINT))"),
+                {"key": key_64},
             )
         return acquired
     else:

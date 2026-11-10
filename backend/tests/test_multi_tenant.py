@@ -84,9 +84,12 @@ async def sqlite_session(sqlite_engine):
         expire_on_commit=False,
     )
     async with session_factory() as session:
-        t1 = Tenant(tenant_id=TENANT_1_ID, name="Skylarp Primary", slug="skylarp-primary")
-        t2 = Tenant(tenant_id=TENANT_2_ID, name="Enterprise Client", slug="enterprise-client")
-        session.add_all([t1, t2])
+        existing_t1 = await session.get(Tenant, TENANT_1_ID)
+        if not existing_t1:
+            session.add(Tenant(tenant_id=TENANT_1_ID, name="Skylarp Primary", slug="skylarp-primary"))
+        existing_t2 = await session.get(Tenant, TENANT_2_ID)
+        if not existing_t2:
+            session.add(Tenant(tenant_id=TENANT_2_ID, name="Enterprise Client", slug="enterprise-client"))
         await session.commit()
         yield session
 
@@ -125,9 +128,12 @@ async def postgres_session(postgres_engine):
         expire_on_commit=False,
     )
     async with session_factory() as session:
-        t1 = Tenant(tenant_id=TENANT_1_ID, name="Skylarp Primary", slug="skylarp-primary")
-        t2 = Tenant(tenant_id=TENANT_2_ID, name="Enterprise Client", slug="enterprise-client")
-        session.add_all([t1, t2])
+        existing_t1 = await session.get(Tenant, TENANT_1_ID)
+        if not existing_t1:
+            session.add(Tenant(tenant_id=TENANT_1_ID, name="Skylarp Primary", slug="skylarp-primary"))
+        existing_t2 = await session.get(Tenant, TENANT_2_ID)
+        if not existing_t2:
+            session.add(Tenant(tenant_id=TENANT_2_ID, name="Enterprise Client", slug="enterprise-client"))
         await session.commit()
         yield session
 

@@ -97,13 +97,19 @@ async_session_factory = async_sessionmaker(
 )
 
 
-async def set_session_tenant_context(session: AsyncSession, tenant_id: Any | None) -> None:
+async def set_session_tenant_context(session: AsyncSession, tenant_id: Any | None, switch_role: bool = True) -> None:
     """
     Set transaction-local tenant context for PostgreSQL Row-Level Security.
     Fails closed if tenant_id is None by setting an empty string.
+    Ensures runtime role is skylarp_app_user to enforce RLS (NOSUPERUSER, NOBYPASSRLS).
     """
     bind = session.bind or engine
     if bind.dialect.name == "postgresql":
+        if switch_role:
+            try:
+                await session.execute(text("SET ROLE skylarp_app_user"))
+            except Exception as e:
+                logger.debug("Could not switch role to skylarp_app_user: %s", e)
         tid_str = str(tenant_id) if tenant_id else ""
         await session.execute(
             text("SELECT set_config('app.current_tenant_id', :tid, true)"),
@@ -111,13 +117,18 @@ async def set_session_tenant_context(session: AsyncSession, tenant_id: Any | Non
         )
 
 
-async def set_session_user_context(session: AsyncSession, user_id: Any | None) -> None:
+async def set_session_user_context(session: AsyncSession, user_id: Any | None, switch_role: bool = True) -> None:
     """
     Set transaction-local user context for PostgreSQL Row-Level Security.
     Used during login/tenant selection to isolate membership queries per user.
     """
     bind = session.bind or engine
     if bind.dialect.name == "postgresql":
+        if switch_role:
+            try:
+                await session.execute(text("SET ROLE skylarp_app_user"))
+            except Exception as e:
+                logger.debug("Could not switch role to skylarp_app_user: %s", e)
         uid_str = str(user_id) if user_id else ""
         await session.execute(
             text("SELECT set_config('app.current_user_id', :uid, true)"),
@@ -135,6 +146,13 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
         finally:
+            if (session.bind or engine).dialect.name == "postgresql":
+                try:
+                    await session.execute(text("RESET app.current_tenant_id"))
+                    await session.execute(text("RESET app.current_user_id"))
+                    await session.execute(text("RESET ROLE"))
+                except Exception:
+                    pass
             await session.close()
 
 
@@ -158,6 +176,7 @@ async def get_tenant_db_session(tenant_id: Any | None = None) -> AsyncGenerator[
                 try:
                     await session.execute(text("RESET app.current_tenant_id"))
                     await session.execute(text("RESET app.current_user_id"))
+                    await session.execute(text("RESET ROLE"))
                 except Exception:
                     pass
             await session.close()

@@ -495,3 +495,130 @@ async def test_postgres_connection_pool_context_leakage(pg_engine):
         val2 = (await s2.execute(text("SELECT current_setting('app.current_tenant_id', true)"))).scalar()
         assert val2 is None or val2 == "", "Connection pool leaked tenant context!"
 
+
+# =====================================================================
+# 6. Advisory Lock Explicit Unlock, Invalidation & Connection Loss
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_postgres_advisory_lock_64bit_key_collision_resistance():
+    """Verify that 64-bit advisory lock key generates distinct signed bigints."""
+    from services.sync_engine import compute_advisory_lock_key_64
+
+    t1 = uuid.uuid4()
+    t2 = uuid.uuid4()
+    c1 = uuid.uuid4()
+    c2 = uuid.uuid4()
+
+    k1 = compute_advisory_lock_key_64(t1, c1)
+    k2 = compute_advisory_lock_key_64(t1, c2)
+    k3 = compute_advisory_lock_key_64(t2, c1)
+
+    assert isinstance(k1, int)
+    assert -(2**63) <= k1 < 2**63
+    assert -(2**63) <= k2 < 2**63
+    assert -(2**63) <= k3 < 2**63
+    assert len({k1, k2, k3}) == 3, "Advisory keys must be distinct"
+
+
+@pytest.mark.asyncio
+async def test_postgres_advisory_lock_explicit_unlock_and_invalidation(pg_engine):
+    """
+    Verify that SessionAdvisoryLock verifies explicit unlock success,
+    and invalidates the connection if unlock fails or connection is unhealthy.
+    """
+    tenant_id = uuid.uuid4()
+    conn_id = uuid.uuid4()
+
+    lock = SessionAdvisoryLock(pg_engine, tenant_id=tenant_id, connection_id=conn_id)
+    acquired = await lock.acquire()
+    assert acquired is True
+    assert lock.is_locked is True
+    assert lock.conn is not None
+
+    # Normal release verifies explicit unlock
+    await lock.release()
+    assert lock.is_locked is False
+    assert lock.conn is None
+
+    # Test error handling / invalidation path during release
+    lock2 = SessionAdvisoryLock(pg_engine, tenant_id=tenant_id, connection_id=conn_id)
+    await lock2.acquire()
+    # Simulate an external disconnect/breakage by closing the underlying connection socket
+    underlying_conn = lock2.conn
+    await underlying_conn.invalidate()
+    # release() should handle the invalid connection gracefully and not raise
+    await lock2.release()
+    assert lock2.is_locked is False
+
+
+@pytest.mark.asyncio
+async def test_postgres_advisory_lock_connection_loss_auto_release(pg_engine):
+    """
+    Verify that when a connection holding an advisory lock terminates or drops,
+    PostgreSQL automatically releases the lock, allowing a second connection to acquire it.
+    """
+    tenant_id = uuid.uuid4()
+    conn_id = uuid.uuid4()
+
+    lock1 = SessionAdvisoryLock(pg_engine, tenant_id=tenant_id, connection_id=conn_id)
+    acquired1 = await lock1.acquire()
+    assert acquired1 is True
+
+    # lock2 on a separate connection cannot acquire while lock1 is held
+    lock2 = SessionAdvisoryLock(pg_engine, tenant_id=tenant_id, connection_id=conn_id)
+    acquired2 = await lock2.acquire()
+    assert acquired2 is False
+
+    # Simulate sudden connection loss on lock1 by invalidating the connection
+    await lock1.conn.invalidate()
+    lock1.is_locked = False
+    lock1.conn = None
+
+    # Now lock3 on another connection should be able to acquire immediately
+    # because PostgreSQL drops session advisory locks on connection termination
+    lock3 = SessionAdvisoryLock(pg_engine, tenant_id=tenant_id, connection_id=conn_id)
+    acquired3 = await lock3.acquire()
+    assert acquired3 is True, "PostgreSQL should release advisory lock on connection loss"
+    await lock3.release()
+
+
+# =====================================================================
+# 7. Runtime Database Role Enforcement (skylarp_app_user)
+# =====================================================================
+
+@pytest.mark.asyncio
+async def test_postgres_runtime_role_skylarp_app_user(pg_engine):
+    """
+    Confirm that the runtime DB role is actually skylarp_app_user (not superuser),
+    that rolsuper is false, and that RLS is actively enforced under this role.
+    """
+    session_factory = async_sessionmaker(
+        bind=pg_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    # 1. Verify role attributes in catalog
+    async with session_factory() as session:
+        res = await session.execute(
+            text("SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'skylarp_app_user'")
+        )
+        row = res.mappings().one()
+        assert row["rolname"] == "skylarp_app_user"
+        assert row["rolsuper"] is False, "skylarp_app_user must NOT be a superuser"
+        assert row["rolbypassrls"] is False, "skylarp_app_user must NOT have bypassrls privilege"
+
+    # 2. Verify set_session_tenant_context switches role to skylarp_app_user
+    async with session_factory() as session:
+        await set_session_tenant_context(session, TENANT_A_ID)
+        user_res = await session.execute(text("SELECT current_user"))
+        current_user = user_res.scalar_one()
+        assert current_user == "skylarp_app_user", f"Expected current_user to be skylarp_app_user, got {current_user}"
+
+        # Clean reset
+        await session.execute(text("RESET ROLE"))
+        reset_res = await session.execute(text("SELECT current_user"))
+        reset_user = reset_res.scalar_one()
+        assert reset_user != "skylarp_app_user"
+
