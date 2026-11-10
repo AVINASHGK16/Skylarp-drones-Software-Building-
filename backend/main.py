@@ -21,6 +21,7 @@ ROOT_DIR = BACKEND_DIR.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from api.auth_routes import auth_router
 from api.routes import router as api_router
 from services.analytics_engine import generate_dashboard_metrics
 from services.bi_agent import BIAgent
@@ -115,6 +116,14 @@ def initialize_app_data(app: FastAPI) -> None:
     app.state.last_updated_at = metadata.get("last_updated_at")
     app.state.fallback_reason = metadata.get("fallback_reason")
 
+    # Multi-tenant context cache initialized with default Skylarp tenant
+    import uuid
+    default_tenant_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
+    app.state.tenant_metrics_cache = {default_tenant_id: dashboard_metrics}
+    app.state.tenant_bi_agents = {default_tenant_id: bi_agent}
+    app.state.tenant_dfs = {default_tenant_id: (deals_df, wo_df, quality_report)}
+    app.state.tenant_metadata = {default_tenant_id: metadata}
+
     logger.info(
         "Application state initialization complete. Status: '%s', Source: '%s', Records: %d",
         metadata.get("data_status"),
@@ -165,7 +174,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API Router
+# Include API Routers
+app.include_router(auth_router, prefix="/auth")
 app.include_router(api_router)
 
 

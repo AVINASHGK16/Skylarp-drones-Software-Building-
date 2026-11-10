@@ -30,6 +30,28 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 
+import uuid
+from api.routes import get_authenticated_tenant_context, AuthenticatedTenantContext
+from db.models.tenant import User, TenantMembership
+
+
+def mock_auth_context():
+    dummy_user = User(
+        user_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
+        email="test@skylarp.com",
+        full_name="Test User",
+        is_active=True,
+    )
+    dummy_membership = TenantMembership(
+        membership_id=uuid.UUID("33333333-3333-3333-3333-333333333333"),
+        tenant_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        user_id=dummy_user.user_id,
+        role="OWNER",
+        is_active=True,
+    )
+    return AuthenticatedTenantContext(user=dummy_user, membership=dummy_membership)
+
+
 # Ensure backend directory is in sys.path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BACKEND_DIR.parent
@@ -336,51 +358,55 @@ def test_8_both_sources_failing_natural_startup_and_503(mock_load):
         },
     )
 
-    with TestClient(app) as client:
-        # Verify app initialized into unavailable state
-        assert app.state.data_status == "unavailable"
-        assert app.state.data_source == "unavailable"
-        assert app.state.dashboard_metrics is None
+    app.dependency_overrides[get_authenticated_tenant_context] = mock_auth_context
+    try:
+        with TestClient(app) as client:
+            # Verify app initialized into unavailable state
+            assert app.state.data_status == "unavailable"
+            assert app.state.data_source == "unavailable"
+            assert app.state.dashboard_metrics is None
 
-        # 1. GET /metrics must reject with HTTP 503
-        res_metrics = client.get("/metrics")
-        assert res_metrics.status_code == 503
-        metrics_body = res_metrics.json()
-        assert "No usable dataset available" in metrics_body["detail"]
-        assert "DATA_SOURCES_UNAVAILABLE" in metrics_body["detail"]
+            # 1. GET /metrics must reject with HTTP 503
+            res_metrics = client.get("/metrics")
+            assert res_metrics.status_code == 503
+            metrics_body = res_metrics.json()
+            assert "No usable dataset available" in metrics_body["detail"]
+            assert "DATA_SOURCES_UNAVAILABLE" in metrics_body["detail"]
 
-        # 2. POST /ask must reject with HTTP 503
-        res_ask = client.post("/ask", json={"question": "What is our revenue?"})
-        assert res_ask.status_code == 503
-        ask_body = res_ask.json()
-        assert "No usable dataset could be loaded" in ask_body["detail"]
+            # 2. POST /ask must reject with HTTP 503
+            res_ask = client.post("/ask", json={"question": "What is our revenue?"})
+            assert res_ask.status_code == 503
+            ask_body = res_ask.json()
+            assert "No usable dataset could be loaded" in ask_body["detail"]
 
-        # 3. GET /leadership-report must reject with HTTP 503
-        res_report = client.get("/leadership-report")
-        assert res_report.status_code == 503
-        report_body = res_report.json()
-        assert "No usable dataset could be loaded" in report_body["detail"]
+            # 3. GET /leadership-report must reject with HTTP 503
+            res_report = client.get("/leadership-report")
+            assert res_report.status_code == 503
+            report_body = res_report.json()
+            assert "No usable dataset could be loaded" in report_body["detail"]
 
-        # 4. GET /data-status reflects exact unavailable status (HTTP 200)
-        res_status = client.get("/data-status")
-        assert res_status.status_code == 200
-        status_body = res_status.json()
-        assert status_body["data_status"] == "unavailable"
-        assert status_body["data_source"] == "unavailable"
-        assert status_body["loaded_at"] is None
-        assert status_body["fallback_reason"] == DATA_SOURCES_UNAVAILABLE
+            # 4. GET /data-status reflects exact unavailable status (HTTP 200)
+            res_status = client.get("/data-status")
+            assert res_status.status_code == 200
+            status_body = res_status.json()
+            assert status_body["data_status"] == "unavailable"
+            assert status_body["data_source"] == "unavailable"
+            assert status_body["loaded_at"] is None
+            assert status_body["fallback_reason"] == DATA_SOURCES_UNAVAILABLE
 
-        # 5. GET /ready returns HTTP 503
-        res_ready = client.get("/ready")
-        assert res_ready.status_code == 503
-        ready_body = res_ready.json()
-        assert ready_body["status"] == "not_ready"
-        assert ready_body["data_status"] == "unavailable"
+            # 5. GET /ready returns HTTP 503
+            res_ready = client.get("/ready")
+            assert res_ready.status_code == 503
+            ready_body = res_ready.json()
+            assert ready_body["status"] == "not_ready"
+            assert ready_body["data_status"] == "unavailable"
 
-        # 6. GET /health remains 200 OK (liveness)
-        res_health = client.get("/health")
-        assert res_health.status_code == 200
-        assert res_health.json()["status"] == "healthy"
+            # 6. GET /health remains 200 OK (liveness)
+            res_health = client.get("/health")
+            assert res_health.status_code == 200
+            assert res_health.json()["status"] == "healthy"
+    finally:
+        app.dependency_overrides.pop(get_authenticated_tenant_context, None)
 
 
 # =============================================================================
@@ -580,65 +606,69 @@ def test_15_exact_data_status_json_schema(mock_fetch):
     """Scenario 15: Assert the exact JSON key structure returned by /data-status across modes."""
     # 1. Live mode JSON schema
     mock_fetch.side_effect = lambda board_id: MOCK_DEALS_ITEMS if board_id == "deals_1" else MOCK_WO_ITEMS
-    with TestClient(app) as client:
-        # Re-initialize app to live state
-        with patch.dict(os.environ, {
-            "MONDAY_API_KEY": "valid_key_123456",
-            "DEALS_BOARD_ID": "deals_1",
-            "WORK_ORDERS_BOARD_ID": "wo_1",
-        }):
-            initialize_app_data(app)
+    app.dependency_overrides[get_authenticated_tenant_context] = mock_auth_context
+    try:
+        with TestClient(app) as client:
+            # Re-initialize app to live state
+            with patch.dict(os.environ, {
+                "MONDAY_API_KEY": "valid_key_123456",
+                "DEALS_BOARD_ID": "deals_1",
+                "WORK_ORDERS_BOARD_ID": "wo_1",
+            }):
+                initialize_app_data(app)
 
-        res_live = client.get("/data-status")
-        assert res_live.status_code == 200
-        live_json = res_live.json()
-        assert set(live_json.keys()) == {
-            "data_source",
-            "data_status",
-            "loaded_at",
-            "source_modified_at",
-            "data_as_of",
-            "last_updated_at",
-            "fallback_reason",
-        }
-        assert live_json["data_source"] == "monday_api"
-        assert live_json["data_status"] == "live"
-        assert live_json["source_modified_at"] is None
-        assert live_json["data_as_of"] is None
-        assert live_json["fallback_reason"] is None
-        assert isinstance(live_json["loaded_at"], str)
-        assert live_json["last_updated_at"] == live_json["loaded_at"]
+            res_live = client.get("/data-status")
+            assert res_live.status_code == 200
+            live_json = res_live.json()
+            assert set(live_json.keys()) == {
+                "data_source",
+                "data_status",
+                "loaded_at",
+                "source_modified_at",
+                "data_as_of",
+                "last_updated_at",
+                "fallback_reason",
+            }
+            assert live_json["data_source"] == "monday_api"
+            assert live_json["data_status"] == "live"
+            assert live_json["source_modified_at"] is None
+            assert live_json["data_as_of"] is None
+            assert live_json["fallback_reason"] is None
+            assert isinstance(live_json["loaded_at"], str)
+            assert live_json["last_updated_at"] == live_json["loaded_at"]
 
-        # 2. Fallback mode JSON schema
-        mock_fetch.side_effect = requests.exceptions.HTTPError("500 Server Error")
-        with patch.dict(os.environ, {
-            "MONDAY_API_KEY": "valid_key_123456",
-            "DEALS_BOARD_ID": "deals_1",
-            "WORK_ORDERS_BOARD_ID": "wo_1",
-        }):
-            initialize_app_data(app)
+            # 2. Fallback mode JSON schema
+            mock_fetch.side_effect = requests.exceptions.HTTPError("500 Server Error")
+            with patch.dict(os.environ, {
+                "MONDAY_API_KEY": "valid_key_123456",
+                "DEALS_BOARD_ID": "deals_1",
+                "WORK_ORDERS_BOARD_ID": "wo_1",
+            }):
+                initialize_app_data(app)
 
-        res_fb = client.get("/data-status")
-        assert res_fb.status_code == 200
-        fb_json = res_fb.json()
-        assert set(fb_json.keys()) == {
-            "data_source",
-            "data_status",
-            "loaded_at",
-            "source_modified_at",
-            "data_as_of",
-            "last_updated_at",
-            "fallback_reason",
-        }
-        assert fb_json["data_source"] == "excel_fallback"
-        assert fb_json["data_status"] == "fallback"
-        assert fb_json["data_as_of"] is None
-        assert set(fb_json["source_modified_at"].keys()) == {
-            "deals_file",
-            "deals_modified_at",
-            "work_orders_file",
-            "work_orders_modified_at",
-        }
+            res_fb = client.get("/data-status")
+            assert res_fb.status_code == 200
+            fb_json = res_fb.json()
+            assert set(fb_json.keys()) == {
+                "data_source",
+                "data_status",
+                "loaded_at",
+                "source_modified_at",
+                "data_as_of",
+                "last_updated_at",
+                "fallback_reason",
+            }
+            assert fb_json["data_source"] == "excel_fallback"
+            assert fb_json["data_status"] == "fallback"
+            assert fb_json["data_as_of"] is None
+            assert set(fb_json["source_modified_at"].keys()) == {
+                "deals_file",
+                "deals_modified_at",
+                "work_orders_file",
+                "work_orders_modified_at",
+            }
+    finally:
+        app.dependency_overrides.pop(get_authenticated_tenant_context, None)
         assert fb_json["source_modified_at"]["deals_file"] == "Deal funnel Data.xlsx"
         assert fb_json["source_modified_at"]["work_orders_file"] == "Work_Order_Tracker Data.xlsx"
         assert isinstance(fb_json["source_modified_at"]["deals_modified_at"], str)

@@ -25,6 +25,8 @@ __pycache__/
 # Data & Excel files
 *.xlsx
 *.xls
+*.db
+*.sqlite
 
 # OS metadata
 .DS_Store
