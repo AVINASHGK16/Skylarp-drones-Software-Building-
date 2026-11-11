@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from api.auth_routes import auth_router
 from api.routes import router as api_router
+from api.demo_routes import demo_router
 from services.analytics_engine import generate_dashboard_metrics
 from services.bi_agent import BIAgent
 from services.data_cleaner import (
@@ -31,6 +33,7 @@ from services.data_cleaner import (
     generate_data_quality_report,
 )
 from services.data_loader import load_dataset
+from services.demo_data import generate_synthetic_demo_dataset
 from services.monday_service import MondayClient
 
 # Logging setup
@@ -41,11 +44,65 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def initialize_demo_data(app: FastAPI) -> None:
+    """
+    Initialize isolated synthetic demo dataset and metrics for portfolio mode.
+    Does NOT touch Monday.com, Excel files, PostgreSQL, or production tenant caches.
+    """
+    load_dotenv(BACKEND_DIR / ".env")
+    load_dotenv(ROOT_DIR / ".env")
+
+    groq_key = os.getenv("GROQ_API_KEY")
+
+    logger.info("Generating synthetic demo dataset for portfolio demonstration...")
+    clean_deals_df, clean_wo_df, demo_metrics, demo_quality_report = generate_synthetic_demo_dataset()
+
+    demo_metadata = {
+        "data_source": "synthetic_demo",
+        "data_status": "live",
+        "last_updated_at": datetime.now(timezone.utc).isoformat(),
+        "fallback_reason": None,
+    }
+
+    demo_bi_agent = None
+    if groq_key and groq_key != "your_groq_api_key_here":
+        try:
+            demo_bi_agent = BIAgent(api_key=groq_key)
+            logger.info("BIAgent initialized for demo mode with Groq API.")
+        except Exception as e:
+            logger.warning("Could not initialize Groq AI for demo mode (%s). Deterministic assistant will be used.", e)
+
+    # Store strictly in segregated demo state attributes
+    app.state.demo_mode_enabled = True
+    app.state.demo_metrics = demo_metrics
+    app.state.demo_dataset = (clean_deals_df, clean_wo_df, demo_quality_report)
+    app.state.demo_metadata = demo_metadata
+    app.state.demo_bi_agent = demo_bi_agent
+
+    # Leave production caches unpopulated / safe
+    app.state.tenant_metrics_cache = {}
+    app.state.tenant_bi_agents = {}
+    app.state.tenant_dfs = {}
+    app.state.tenant_metadata = {}
+
+    logger.info(
+        "Demo mode initialization complete: %d synthetic deals, %d work orders ready.",
+        len(clean_deals_df),
+        len(clean_wo_df),
+    )
+
+
 def initialize_app_data(app: FastAPI) -> None:
     """
     Load data from Monday.com with reliable Excel fallback during application startup,
     clean datasets, pre-compute metrics, and cache in memory.
     """
+    app.state.demo_mode_enabled = False
+    app.state.demo_metrics = None
+    app.state.demo_dataset = None
+    app.state.demo_metadata = None
+    app.state.demo_bi_agent = None
+
     # Load environment variables from .env in backend or root
     load_dotenv(BACKEND_DIR / ".env")
     load_dotenv(ROOT_DIR / ".env")
@@ -135,8 +192,13 @@ def initialize_app_data(app: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown events."""
-    logger.info("Initializing Business Intelligence Agent FastAPI service...")
-    initialize_app_data(app)
+    demo_mode_env = os.getenv("DEMO_MODE", "false").lower() in ("true", "1")
+    if demo_mode_env:
+        logger.info("Initializing Business Intelligence Agent FastAPI service in DEMO_MODE...")
+        initialize_demo_data(app)
+    else:
+        logger.info("Initializing Business Intelligence Agent FastAPI service in PRODUCTION MODE...")
+        initialize_app_data(app)
     yield
     logger.info("Shutting down Business Intelligence Agent API service.")
 
@@ -176,6 +238,7 @@ app.add_middleware(
 
 # Include API Routers
 app.include_router(auth_router, prefix="/auth")
+app.include_router(demo_router)
 app.include_router(api_router)
 
 

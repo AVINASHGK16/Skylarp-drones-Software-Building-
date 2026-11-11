@@ -28,29 +28,37 @@ def mask_db_url(url: str) -> str:
     return re.sub(r"://([^:@]+):([^@]+)@", r"://\1:****@", url)
 
 
-def resolve_database_url() -> str:
+def resolve_database_url() -> str | None:
     """
     Resolve and validate DATABASE_URL based on application environment.
-    Enforces fail-fast behavior in production.
+    Enforces fail-fast behavior in production when not in demo mode.
+    Returns None if in DEMO_MODE and no DATABASE_URL is configured.
     """
     app_env = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "development")).strip().lower()
     raw_url = os.getenv("DATABASE_URL", "").strip()
+    is_demo = os.getenv("DEMO_MODE", "false").lower() in ("true", "1")
 
-    if app_env == "production":
-        if not raw_url:
+    if not raw_url:
+        if is_demo:
+            logger.info("DEMO_MODE=true and DATABASE_URL is not set: Database engine creation skipped.")
+            return None
+        if app_env == "production":
             raise RuntimeError(
                 "CRITICAL: DATABASE_URL must be configured in production environment. "
                 "Silent fallback to SQLite is strictly disallowed."
             )
-        # Verify PostgreSQL protocol scheme
+        from pathlib import Path
+        backend_dir = Path(__file__).resolve().parent.parent
+        db_path = backend_dir / "skylarp_bi.db"
+        raw_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
+
+    # Enforce PostgreSQL protocol in production
+    if app_env == "production":
         if not (raw_url.startswith("postgresql://") or raw_url.startswith("postgres://") or raw_url.startswith("postgresql+")):
             raise RuntimeError(
                 "CRITICAL: Production environment requires a PostgreSQL database connection string "
                 f"(postgresql+asyncpg://...). Received scheme: '{raw_url.split('://')[0] if '://' in raw_url else 'unknown'}'"
             )
-
-    if not raw_url:
-        raw_url = "sqlite+aiosqlite:///./skylarp_bi.db"
 
     # Normalize PostgreSQL schemes to asyncpg driver
     if raw_url.startswith("postgres://"):
@@ -80,20 +88,26 @@ def get_engine_args(url: str) -> dict:
     }
 
 
-def create_app_engine(url: str | None = None) -> AsyncEngine:
-    """Factory creating an AsyncEngine with appropriate pooling."""
-    target_url = url or resolve_database_url()
+def create_app_engine(url: str | None = None) -> AsyncEngine | None:
+    """Factory creating an AsyncEngine with appropriate pooling, or None if no URL provided."""
+    target_url = url if url is not None else resolve_database_url()
+    if not target_url:
+        return None
     return create_async_engine(target_url, **get_engine_args(target_url))
 
 
-engine: AsyncEngine = create_app_engine(DATABASE_URL)
+engine: AsyncEngine | None = create_app_engine(DATABASE_URL)
 
-async_session_factory = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
+async_session_factory: async_sessionmaker[AsyncSession] | None = (
+    async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+    if engine is not None
+    else None
 )
 
 
@@ -138,6 +152,12 @@ async def set_session_user_context(session: AsyncSession, user_id: Any | None, s
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency yielding an async database session with automatic transaction management."""
+    if async_session_factory is None:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service is unavailable. No database connection is configured.",
+        )
     async with async_session_factory() as session:
         try:
             yield session
@@ -146,7 +166,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
         finally:
-            if (session.bind or engine).dialect.name == "postgresql":
+            if engine is not None and (session.bind or engine).dialect.name == "postgresql":
                 try:
                     await session.execute(text("RESET app.current_tenant_id"))
                     await session.execute(text("RESET app.current_user_id"))
@@ -161,6 +181,12 @@ async def get_tenant_db_session(tenant_id: Any | None = None) -> AsyncGenerator[
     FastAPI dependency yielding a tenant-isolated async database session
     with transaction-scoped Row-Level Security context.
     """
+    if async_session_factory is None:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service is unavailable. No database connection is configured.",
+        )
     async with async_session_factory() as session:
         if tenant_id:
             await set_session_tenant_context(session, tenant_id)
@@ -172,7 +198,7 @@ async def get_tenant_db_session(tenant_id: Any | None = None) -> AsyncGenerator[
             raise
         finally:
             # Ensure pooled connection context is cleared
-            if (session.bind or engine).dialect.name == "postgresql":
+            if engine is not None and (session.bind or engine).dialect.name == "postgresql":
                 try:
                     await session.execute(text("RESET app.current_tenant_id"))
                     await session.execute(text("RESET app.current_user_id"))
@@ -185,6 +211,8 @@ async def get_tenant_db_session(tenant_id: Any | None = None) -> AsyncGenerator[
 async def check_database_connection(test_engine: AsyncEngine | None = None) -> dict[str, str | bool]:
     """Execute a lightweight roundtrip query to verify database liveness."""
     eng = test_engine or engine
+    if eng is None:
+        return {"connected": False, "error": "No database engine initialized (DEMO_MODE without DATABASE_URL).", "dialect": "none"}
     try:
         async with eng.connect() as conn:
             await conn.execute(text("SELECT 1"))

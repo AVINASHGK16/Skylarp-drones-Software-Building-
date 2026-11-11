@@ -316,6 +316,14 @@ async def get_cached_metrics(
         meta = DataMetadata(**raw_meta) if isinstance(raw_meta, dict) else raw_meta
         return MetricsResponse(dashboard_metrics=cached_metrics, data_metadata=meta)
 
+    # If dataset status is unavailable and in-memory cache has None, fast-fail with 503
+    if getattr(state, "data_status", None) == "unavailable":
+        fb_reason = getattr(state, "fallback_reason", None) or "Both Monday.com API and local Excel backup sources are unavailable."
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"No usable dataset available: {fb_reason}",
+        )
+
     # Dynamic tenant lookup in database
     try:
         await set_session_tenant_context(session, tenant_id)

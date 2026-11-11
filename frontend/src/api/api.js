@@ -8,6 +8,9 @@ const RAW_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 // Strip any trailing slashes to avoid double-slash URL construction issues
 const BASE_URL = RAW_BASE_URL.trim().replace(/\/+$/, '');
 
+// Explicit Demo Mode configuration (default: false)
+export const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+
 function buildApiUrl(endpoint) {
   return `${BASE_URL}/${endpoint.replace(/^\/+/, '')}`;
 }
@@ -49,11 +52,13 @@ async function request(endpoint, options = {}) {
 
 /**
  * Ask a strategic business question to the AI BI Agent.
+ * Explicitly routes to /demo/ask when VITE_DEMO_MODE=true.
  * @param {string} question
  * @returns {Promise<{answer: string, dashboard_metrics: object, data_quality_notes: string[]}>}
  */
 export async function askQuestion(question) {
-  return request('/ask', {
+  const endpoint = IS_DEMO_MODE ? '/demo/ask' : '/ask';
+  return request(endpoint, {
     method: 'POST',
     body: JSON.stringify({ question }),
   });
@@ -61,20 +66,36 @@ export async function askQuestion(question) {
 
 /**
  * Fetch pre-computed in-memory dashboard metrics.
+ * Explicitly routes to /demo/metrics when VITE_DEMO_MODE=true.
  * @returns {Promise<{dashboard_metrics: object}>}
  */
 export async function getMetrics() {
-  return request('/metrics', {
+  const endpoint = IS_DEMO_MODE ? '/demo/metrics' : '/metrics';
+  return request(endpoint, {
     method: 'GET',
   });
 }
 
 /**
  * Generate comprehensive executive leadership report.
+ * Explicitly routes to /demo/leadership-report when VITE_DEMO_MODE=true.
  * @returns {Promise<{report: string, generated_at: string}>}
  */
 export async function getLeadershipReport() {
-  return request('/leadership-report', {
+  const endpoint = IS_DEMO_MODE ? '/demo/leadership-report' : '/leadership-report';
+  return request(endpoint, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Check dataset source metadata.
+ * Explicitly routes to /demo/data-status when VITE_DEMO_MODE=true.
+ * @returns {Promise<object>}
+ */
+export async function getDataStatus() {
+  const endpoint = IS_DEMO_MODE ? '/demo/data-status' : '/data-status';
+  return request(endpoint, {
     method: 'GET',
   });
 }
