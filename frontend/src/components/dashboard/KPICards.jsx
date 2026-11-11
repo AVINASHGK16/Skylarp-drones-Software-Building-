@@ -22,7 +22,6 @@ export default function KPICards({ pipelineSummary, billingSummary, workOrderSum
     {
       title: 'Active Pipeline Value',
       value: formatCurrency(pipelineSummary?.active_pipeline_value),
-      subtitle: openTotalDeals != null ? `${openTotalDeals} Open Deals` : '—',
       subtitle: explicitOpenValuedCount != null && openTotalDeals != null
         ? `${explicitOpenValuedCount} valued of ${openTotalDeals} open deals`
         : (openTotalDeals != null ? `${openTotalDeals} Open Deals` : '—'),

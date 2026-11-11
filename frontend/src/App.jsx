@@ -7,7 +7,6 @@ import { askQuestion, getLeadershipReport } from './api/api';
 import { AlertTriangle, X } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'dashboard'
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const param = new URLSearchParams(window.location.search).get('tab');
